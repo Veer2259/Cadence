@@ -1,10 +1,25 @@
-import { PhaseNotice } from "@/components/phase-notice";
+import { computePressure } from "@/lib/pressure";
+import { WeekGrid } from "@/components/week/week-grid";
+import { WeekNote } from "@/components/week/week-note";
 
-export default function WeekPage() {
+export const dynamic = "force-dynamic";
+
+export default async function WeekPage() {
+  const pressure = await computePressure();
+
   return (
-    <PhaseNotice title="Week" phase="Phase 5 — week and review">
-      Seven columns of deadline pressure — hours needed against hours available,
-      allocated earliest-due-first so free time is never double-counted.
-    </PhaseNotice>
+    <div className="flex flex-col gap-5">
+      <div>
+        <h1 className="font-mono text-lg tracking-tight text-ink">Week</h1>
+        <p className="judgment mt-1 text-sm text-ink-muted">
+          Hours each deadline needs against the hours actually free before it —
+          allocated earliest-due-first, so nothing is counted twice.
+        </p>
+      </div>
+
+      <WeekNote hasDeadlines={pressure.deadlines.length > 0} />
+
+      <WeekGrid days={pressure.days} deadlines={pressure.deadlines} />
+    </div>
   );
 }

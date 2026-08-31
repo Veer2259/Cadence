@@ -12,6 +12,7 @@ import { db } from "@/db";
 import { tasks, buckets, timeLog } from "@/db/schema";
 import { insertTask, resolveBucketId } from "@/lib/tasks";
 import { istEndOfDayToUtc } from "@/lib/time";
+import { computePressure } from "@/lib/pressure";
 import type { ToolDeclaration } from "@/lib/ai/adapters/types";
 
 const CATEGORY = ["deep", "shallow", "calls", "admin", "errand", "personal"] as const;
@@ -267,13 +268,22 @@ export async function executeChatTool(
       };
     }
 
-    case "get_pressure":
+    case "get_pressure": {
+      const p = await computePressure();
       return {
         result: {
-          available: false,
-          note: "Deadline pressure arrives in Phase 5.",
+          horizonDays: p.horizonDays,
+          freeHoursByDay: p.days.map((d) => ({ date: d.date, freeHours: d.freeHours })),
+          deadlines: p.deadlines.map((d) => ({
+            title: d.title,
+            dueDate: d.dueDate,
+            hoursNeeded: d.hoursNeeded,
+            hoursAvailable: d.hoursAvailable,
+            status: d.status,
+          })),
         },
       };
+    }
 
     default:
       return { result: { error: `unknown tool ${name}` } };
