@@ -12,7 +12,12 @@ import {
 import { getOrCreateDayProfile } from "@/lib/day-profile";
 import { getLivePlan } from "@/lib/plan";
 import type { PlanResult } from "@/lib/ai/schemas";
-import { Ribbon, type RibbonBlock, type Range } from "@/components/ribbon/ribbon";
+import {
+  Ribbon,
+  type RibbonBlock,
+  type Range,
+  type ProtectedRange,
+} from "@/components/ribbon/ribbon";
 import { OverflowList, type OverflowView } from "@/components/ribbon/overflow-list";
 import { PlanActions } from "@/components/today/plan-actions";
 
@@ -23,6 +28,32 @@ function toRanges(windows: [string, string][]): Range[] {
     startMin: hmToMinutes(a),
     endMin: hmToMinutes(b),
   }));
+}
+
+/** Protected blocks clipped to the visible ribbon window, splitting midnight wraps. */
+function protectedRangesInWindow(
+  blocks: { label: string; start: string; end: string }[],
+  winStart: number,
+  winEnd: number,
+): ProtectedRange[] {
+  const out: ProtectedRange[] = [];
+  for (const p of blocks) {
+    let s: number;
+    let e: number;
+    try {
+      s = hmToMinutes(p.start);
+      e = hmToMinutes(p.end);
+    } catch {
+      continue;
+    }
+    const segments = e > s ? [[s, e]] : [[s, 1440], [0, e]];
+    for (const [a, z] of segments) {
+      const cs = Math.max(a, winStart);
+      const ce = Math.min(z, winEnd);
+      if (ce - cs >= 5) out.push({ label: p.label, startMin: cs, endMin: ce });
+    }
+  }
+  return out;
 }
 
 export default async function TodayPage() {
@@ -106,6 +137,12 @@ export default async function TodayPage() {
   const windowStartMin = starts.length ? Math.min(...starts) : 6 * 60;
   const windowEndMin = ends.length ? Math.max(...ends) : 22 * 60;
 
+  const protectedRanges = protectedRangesInWindow(
+    profile.protectedBlocks,
+    windowStartMin,
+    windowEndMin,
+  );
+
   // --- overflow titles ---
   let overflowView: OverflowView[] = [];
   if (live.overflow.length) {
@@ -141,6 +178,7 @@ export default async function TodayPage() {
         windowEndMin={windowEndMin}
         workRanges={workRanges}
         sharpRanges={sharpRanges}
+        protectedRanges={protectedRanges}
         blocks={blocks}
         isToday={realToday}
       />
