@@ -20,11 +20,16 @@ export function AppNav() {
   const pathname = usePathname();
 
   return (
-    <header
+    // role="banner" instead of <header> so a browser extension's `header {…}`
+    // reset can't strip the background. Opaque fill set three ways (class,
+    // inline var, inline fallback) so it always covers the content behind it.
+    <div
+      role="banner"
       className={cn(
-        "fixed inset-x-0 top-0 z-50 border-b border-rule bg-surface",
+        "fixed inset-x-0 top-0 z-[100] border-b border-rule bg-surface",
         NAV_HEIGHT_CLASS,
       )}
+      style={{ backgroundColor: "var(--color-surface, #ffffff)" }}
     >
       <nav className="mx-auto flex h-full max-w-3xl items-stretch px-3 sm:px-4">
         <Link
@@ -67,6 +72,6 @@ export function AppNav() {
           </button>
         </form>
       </nav>
-    </header>
+    </div>
   );
 }
