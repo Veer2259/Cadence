@@ -174,6 +174,8 @@ export const plans = pgTable(
     model: text("model"), // which model produced it
     /** the exact payload sent to the model — needed when a plan comes out wrong */
     inputSnapshot: jsonb("input_snapshot"),
+    /** the model's validated result (blocks, overflow, calibrationNote) as returned */
+    outputSnapshot: jsonb("output_snapshot"),
     /** set when this plan came from a rebalance */
     parentPlanId: uuid("parent_plan_id").references((): AnyPgColumn => plans.id),
   },

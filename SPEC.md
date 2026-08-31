@@ -48,13 +48,13 @@ Do not build, and do not suggest building: multi-user support, sharing or collab
 | Styling | Tailwind CSS + shadcn/ui | See section 9 for the design system |
 | Database | Postgres on Neon | Serverless driver, works on Vercel edge/node runtime |
 | ORM | Drizzle + drizzle-kit migrations | Schema in `db/schema.ts`, migrations committed |
-| AI | `@anthropic-ai/sdk`, server-side only | Section 6 |
+| AI | provider interface (`lib/ai/provider.ts`) with Gemini + Anthropic adapters, server-side only | Section 6; active provider Gemini via `@google/genai` |
 | Validation | Zod | Both for AI structured output and for all form/action input |
 | Dates | `date-fns` + `date-fns-tz` | Single timezone: `Asia/Kolkata`. Store UTC, render IST |
 | Charts | Recharts | Review screen only |
 | Deploy | Vercel | PWA manifest so it installs to the home screen |
 
-The Anthropic API key must never reach the browser. All model calls happen in server actions or route handlers.
+The model API key must never reach the browser. All model calls happen in server actions or route handlers.
 
 ### Repo structure
 
@@ -297,24 +297,56 @@ Then send the computed table to the model for a short `weekNote` — two or thre
 
 ## 6. AI layer
 
+### Provider
+
+The model provider is behind an interface (`lib/ai/provider.ts`) exposing a single
+`runStructured({ role, system, messages, schema })`. Two adapters implement it —
+Gemini and Anthropic — selected at runtime by the `LLM_PROVIDER` env var
+(`gemini` | `anthropic`). The active provider is **Gemini**.
+
+The API key never reaches the browser: all model calls happen in server actions
+or route handlers.
+
 ### Models
 
-Use these API model strings:
+Model IDs live in one file (`lib/ai/models.ts`) as named constants, keyed by
+provider and by role (`compose` | `capture`), each overridable by an env var
+(`GEMINI_COMPOSE_MODEL`, etc.) to ride out an outage without a code change.
 
-- `claude-sonnet-5` — compose, rebalance, week commentary, chat rail
-- `claude-haiku-4-5-20251001` — capture parsing, classification, the debrief summary
+| Role | Gemini (active) | Anthropic (alternate) |
+|---|---|---|
+| compose, rebalance, week commentary, chat rail | `gemini-3.7-flash` | `claude-sonnet-5` |
+| capture parsing, classification, debrief summary | `gemini-3.5-flash-lite` | `claude-haiku-4-5-20251001` |
 
-Put them in `lib/ai/client.ts` as named constants so they can be swapped in one place. Current model and pricing reference: https://docs.claude.com/en/docs/about-claude/models
+Gemini IDs verified against https://ai.google.dev/gemini-api/docs/models (Aug 2026);
+Anthropic reference: https://docs.claude.com/en/docs/about-claude/models.
 
 ### Structured output
 
-Every mode returns validated JSON. Use tool-use with a single forced tool whose input schema is generated from the Zod schema, then parse the tool input with the same Zod schema. Write one helper:
+Every mode returns validated JSON. The schema is derived from the mode's Zod
+schema and passed to the provider:
+
+- **Gemini** — `responseMimeType: "application/json"` + `responseSchema` (the Zod
+  JSON Schema, sanitised to Gemini's dialect).
+- **Anthropic** — a single forced tool whose `input_schema` is the Zod JSON Schema.
+
+The result is parsed with the same Zod schema. On a validation failure, retry
+once with the validation error appended as a user message. On a second failure,
+throw a typed `StructuredOutputError` the UI renders as "The planner returned
+something I couldn't read — try again." Never render unvalidated model output.
+
+`runStructured` signature:
 
 ```ts
-runStructured<T>({ model, system, messages, schema, toolName }): Promise<T>
+runStructured<T>({ role, system, messages, schema, schemaName? }): Promise<T>
 ```
 
-On a validation failure, retry once with the validation error appended as a user message. On a second failure, throw a typed error the UI renders as "The planner returned something I couldn't read — try again." Never render unvalidated model output.
+### Rate limits and transient errors
+
+Separately from the Zod-validation retry above, the provider layer retries the
+transport call on HTTP **429** (free-tier RPM) and transient **5xx** with
+exponential backoff + jitter (429 gets the longer base delay). The Gemini free
+tier is ~5 requests/minute on the compose model.
 
 ### 6.1 Compose — the core mode
 
@@ -561,7 +593,11 @@ Accessibility floor: responsive to 380px, visible keyboard focus, `prefers-reduc
 
 ```
 DATABASE_URL=
-ANTHROPIC_API_KEY=
+LLM_PROVIDER=            # "gemini" (active) | "anthropic"
+GEMINI_API_KEY=         # when LLM_PROVIDER=gemini
+ANTHROPIC_API_KEY=      # when LLM_PROVIDER=anthropic
+# optional per-role model pins: GEMINI_COMPOSE_MODEL, GEMINI_CAPTURE_MODEL,
+#   ANTHROPIC_COMPOSE_MODEL, ANTHROPIC_CAPTURE_MODEL
 APP_PASSPHRASE=
 SESSION_SECRET=
 CAPTURE_TOKEN=

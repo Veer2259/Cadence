@@ -19,3 +19,8 @@ const pool = new Pool({ connectionString });
 
 export const db = drizzle(pool, { schema });
 export { schema };
+
+/** For standalone scripts: close the connection pool so the process can exit cleanly. */
+export function closeDb(): Promise<void> {
+  return pool.end();
+}

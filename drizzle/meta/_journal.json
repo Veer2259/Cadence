@@ -8,6 +8,13 @@
       "when": 1788121244892,
       "tag": "0000_colorful_stick",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788181263517,
+      "tag": "0001_first_queen_noir",
+      "breakpoints": true
     }
   ]
 }

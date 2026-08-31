@@ -3,7 +3,8 @@
 A single-user AI day planner. Full specification in [SPEC.md](./SPEC.md).
 
 Stack: Next.js 16 (App Router, TypeScript strict) · Tailwind CSS v4 · Postgres on
-Neon · Drizzle ORM + drizzle-kit · Zod · date-fns.
+Neon · Drizzle ORM + drizzle-kit · Zod · date-fns · Gemini (`@google/genai`) with
+an Anthropic adapter behind the same interface.
 
 ---
 
@@ -12,14 +13,24 @@ Neon · Drizzle ORM + drizzle-kit · Zod · date-fns.
 | Phase | Scope | State |
 |---|---|---|
 | **1 — Foundation** | Schema, migrations, seed, auth, task/bucket CRUD, day-profile editor, inbox | **done** |
-| 2 — Compose & ribbon | The planner, Today screen, plan commit | not started |
+| **2 — Compose & ribbon** | Provider interface, compose mode, post-validation, plan/block persistence, Today ribbon, commit | **done** |
 | 3 — Debrief & calibration | Actuals logging, calibration, carry-over | not started |
 | 4 — Rebalance & chat rail | Mid-day replan, assistant, capture | not started |
 | 5 — Week & review | Deadline pressure, charts | not started |
 | 6 — Calendar, PWA, capture endpoint | Google Calendar sync, iOS shortcut | not started |
 
-No model calls exist yet. `ANTHROPIC_API_KEY` and the Google / capture variables
-are placeholders until their phases.
+Phase 2 needs `LLM_PROVIDER` + `GEMINI_API_KEY` (see `.env.example`). The Google
+Calendar and capture variables are still placeholders until Phase 6.
+
+### Model notes
+
+- Provider is chosen by `LLM_PROVIDER` (`gemini` active). Model IDs are in
+  [`lib/ai/models.ts`](lib/ai/models.ts); each can be pinned via an env var
+  (`GEMINI_COMPOSE_MODEL`, …) to ride out an outage.
+- Default compose model is `gemini-3.7-flash`. If it returns HTTP 503
+  ("high demand"), pin `GEMINI_COMPOSE_MODEL=gemini-3.6-flash` until it recovers.
+- `node --conditions=react-server --import tsx scripts/try-compose.ts` dry-runs a
+  compose against the real DB + model without writing anything.
 
 ---
 
@@ -107,6 +118,7 @@ Open <http://localhost:3000>. You will be redirected to `/login`; enter your
 | `npm run db:studio` | Browse the database in Drizzle Studio |
 | `npm run db:seed` | Seed sample data (see above) |
 | `npx tsx scripts/check-db.ts` | Read-only check that the schema is live |
+| `node --conditions=react-server --import tsx scripts/try-compose.ts` | Dry-run compose against the real DB + model (no writes) |
 
 ---
 

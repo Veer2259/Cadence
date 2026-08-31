@@ -45,6 +45,11 @@ export function istTimeString(utc: Date): string {
   return formatInTimeZone(utc, IST, "HH:mm");
 }
 
+/** Minutes since IST midnight for an instant (0..1439, or up to 1440 at end-of-day). */
+export function istMinutesOfDay(utc: Date): number {
+  return hmToMinutes(formatInTimeZone(utc, IST, "HH:mm"));
+}
+
 /** Free-form IST formatting (date-fns tokens). */
 export function formatIst(utc: Date, fmt: string): string {
   return formatInTimeZone(utc, IST, fmt);
@@ -69,11 +74,31 @@ export function istEndOfDayToUtc(dateStr: string): Date {
   return istWallToUtc(dateStr, "23:59");
 }
 
+/**
+ * The UTC instant of a wall-clock time on an IST day, by minute arithmetic from
+ * IST midnight. Accepts "24:00" (— midnight of the next day). IST has no DST so
+ * this is exact.
+ */
+export function istDayInstant(dateStr: string, hm: string): Date {
+  const base = istWallToUtc(dateStr, "00:00").getTime();
+  return new Date(base + hmToMinutes(hm) * 60_000);
+}
+
 /** Weekday key of the IST calendar day `utc` falls on. */
 export function istWeekdayKey(utc: Date): WeekdayKey {
   // date-fns "i" => 1 (Mon) .. 7 (Sun)
   const iso = Number(formatInTimeZone(utc, IST, "i"));
   return WEEKDAY_KEYS[iso - 1];
+}
+
+/** Weekday key for an IST calendar date string ("YYYY-MM-DD"). */
+export function istWeekdayKeyForDate(dateStr: string): WeekdayKey {
+  return istWeekdayKey(istWallToUtc(dateStr, "12:00"));
+}
+
+/** The IST calendar date string for "today" (or any instant). */
+export function istToday(now: Date = new Date()): string {
+  return istDateString(now);
 }
 
 /* ------------------------------------------------------------------ */
