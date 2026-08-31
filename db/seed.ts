@@ -17,10 +17,10 @@
 
 import "./load-env";
 
-import { createInterface } from "node:readline";
 import { db, closeDb } from "./index";
 import { buckets, tasks, habits, dayProfile, seedRuns } from "./schema";
 import { DEFAULT_DAY_PROFILE } from "../lib/day-profile";
+import { confirmDestructive } from "./confirm";
 
 const force = process.argv.includes("--force");
 
@@ -40,16 +40,6 @@ async function knownSeededTaskIds(): Promise<Set<string> | null> {
   } catch {
     return null; // table missing — migrations not run yet
   }
-}
-
-function ask(question: string): Promise<string> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) =>
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer);
-    }),
-  );
 }
 
 async function insertSeedData() {
@@ -172,34 +162,30 @@ async function main() {
   }
 
   // ------------------------------------------------------------------- --force
-  console.log("\n--force: the following rows will be PERMANENTLY DELETED:\n");
-  console.log(`  tasks   (${currentTasks.length}):`);
-  for (const t of currentTasks) {
-    const mark = foreign.some((f) => f.id === t.id) ? "  ← NOT from a seed run" : "";
-    console.log(`    · ${t.title}${mark}`);
-  }
-  console.log(`  buckets (${currentBuckets.length}): ${currentBuckets.map((x) => x.name).join(", ") || "—"}`);
-  console.log(`  habits  (${currentHabits.length}): ${currentHabits.map((x) => x.name).join(", ") || "—"}`);
-
+  const manifest = [
+    "--force: the following rows will be PERMANENTLY DELETED:",
+    "",
+    `  tasks   (${currentTasks.length}):`,
+    ...currentTasks.map(
+      (t) =>
+        `    · ${t.title}${foreign.some((f) => f.id === t.id) ? "  ← NOT from a seed run" : ""}`,
+    ),
+    `  buckets (${currentBuckets.length}): ${currentBuckets.map((x) => x.name).join(", ") || "—"}`,
+    `  habits  (${currentHabits.length}): ${currentHabits.map((x) => x.name).join(", ") || "—"}`,
+  ];
   if (foreign.length > 0) {
-    console.log(
-      `\n  ⚠  ${foreign.length} of these task(s) were NOT created by a seed run — ` +
-        `they look like data you entered by hand.`,
+    manifest.push(
+      "",
+      `  ⚠  ${foreign.length} of these task(s) were NOT created by a seed run — ` +
+        "they look like data you entered by hand.",
     );
   }
 
-  if (!process.stdin.isTTY) {
-    console.error(
-      "\nRefusing: --force needs an interactive terminal so you can confirm. " +
-        "Aborting — nothing was deleted.",
-    );
-    process.exitCode = 1;
-    return;
-  }
-
-  const answer = await ask('\nType exactly "yes" to delete everything above and reseed: ');
-  if (answer.trim() !== "yes") {
-    console.log("Not confirmed — nothing was deleted.");
+  const ok = await confirmDestructive(
+    manifest,
+    'Type exactly "yes" to delete everything above and reseed: ',
+  );
+  if (!ok) {
     process.exitCode = 1;
     return;
   }

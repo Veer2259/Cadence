@@ -12,6 +12,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx db/seed.ts",
+    "db:reset-history": "tsx db/reset-history.ts",
     "test": "node --import tsx --test lib/**/*.test.ts"
   },
   "dependencies": {

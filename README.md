@@ -118,12 +118,13 @@ Open <http://localhost:3000>. You will be redirected to `/login`; enter your
 |---|---|
 | `npm run dev` | Start the dev server |
 | `npm run build` | Production build (also full typecheck) |
-| `npm test` | Unit tests for `lib/time.ts` (timezone + work-window math) |
+| `npm test` | Unit tests (`lib/time.ts` window math, `lib/calibration.ts` EWMA) |
 | `npm run db:generate` | Turn `db/schema.ts` changes into a new SQL migration |
 | `npm run db:migrate` | Apply pending migrations to `DATABASE_URL` |
 | `npm run db:push` | Push schema straight to the DB without a migration file (dev only) |
 | `npm run db:studio` | Browse the database in Drizzle Studio |
 | `npm run db:seed` | Seed sample data (see above) |
+| `npm run db:reset-history` | Wipe all plans / blocks / overflow / time_log / calibration and reset task state (defer counts, done flags) for a clean slate. Prints what it will delete and needs an interactive "yes"; aborts if stdin is not a TTY. Keeps tasks, buckets, habits, the day profile. |
 | `npx tsx scripts/check-db.ts` | Read-only check that the schema is live |
 | `node --conditions=react-server --import tsx scripts/try-compose.ts` | Dry-run compose against the real DB + model (no writes) |
 
