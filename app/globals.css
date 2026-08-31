@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/*
+  Design tokens — section 9 of SPEC.md.
+  This is an instrument, not a productivity product: one light theme, hairlines
+  and whitespace instead of shadows, nothing rounded past 4px.
+*/
+@theme {
+  --color-paper: #f7f7f4; /* page background */
+  --color-surface: #ffffff; /* cards, blocks */
+  --color-ink: #16191c; /* primary text */
+  --color-ink-muted: #6b7178; /* secondary text, reasons */
+  --color-rule: #d8d8d0; /* hairlines, 1px, used liberally */
+  --color-sharp: #dde5ea; /* the sharp-hours band on the ribbon */
+  --color-signal: #8c1d18; /* overflow, impossible, over-cap warnings */
+  --color-caution: #a67c00; /* at_risk, tight */
+  --color-settled: #2f5d50; /* done, safe */
+
+  /* IBM Plex Sans for UI, IBM Plex Mono for every number, Newsreader for judgment */
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", "Cascadia Mono",
+    monospace;
+  --font-serif: var(--font-newsreader), ui-serif, Georgia, "Times New Roman", serif;
+
+  --radius: 3px;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Mono digits must line up in columns — that is the whole point of using it. */
+.tabular,
+input[type="time"],
+input[type="date"],
+input[type="number"] {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+}
+
+/* The book face, used for exactly two things: block reasons + the overflow heading. */
+.judgment {
+  font-family: var(--font-serif);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Visible keyboard focus everywhere. */
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 1px;
+}

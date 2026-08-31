@@ -1,0 +1,140 @@
+/**
+ * lib/schemas.ts — Zod schemas for every form / Server Action input (SPEC section 2).
+ * Nothing reaches the database without passing through one of these.
+ */
+
+import { z } from "zod";
+
+export const CATEGORIES = [
+  "deep",
+  "shallow",
+  "calls",
+  "admin",
+  "errand",
+  "personal",
+] as const;
+export const PRIORITIES = ["low", "normal", "high"] as const;
+export const TASK_STATUSES = ["inbox", "active", "done", "dropped"] as const;
+
+export const zCategory = z.enum(CATEGORIES);
+export const zPriority = z.enum(PRIORITIES);
+
+const hex = z
+  .string()
+  .regex(/^#[0-9a-fA-F]{6}$/, "Use a 6-digit hex colour like #2F5D50");
+
+const hm = z.string().regex(/^\d{2}:\d{2}$/, "Use HH:mm");
+const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD");
+
+/* ------------------------------------------------------------------ */
+/*  Buckets                                                           */
+/* ------------------------------------------------------------------ */
+
+export const bucketInput = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Name is required")
+    .max(40)
+    .regex(/^[a-z0-9][a-z0-9 _-]*$/, "Lowercase letters, numbers, spaces, - and _"),
+  color: hex,
+  priorityHint: z.string().trim().max(120).nullish().transform((v) => v || null),
+  active: z.boolean().default(true),
+});
+export type BucketInput = z.infer<typeof bucketInput>;
+
+/* ------------------------------------------------------------------ */
+/*  Tasks                                                             */
+/* ------------------------------------------------------------------ */
+
+const optionalUuid = z
+  .string()
+  .uuid()
+  .nullish()
+  .transform((v) => v || null);
+
+export const taskInput = z.object({
+  title: z.string().trim().min(1, "Title is required").max(200),
+  notes: z.string().trim().max(2000).nullish().transform((v) => v || null),
+  bucketId: optionalUuid,
+  category: zCategory,
+  estimateMin: z.coerce
+    .number()
+    .int()
+    .min(5)
+    .max(1440)
+    .nullish()
+    .transform((v) => v ?? null),
+  dueDate: ymd.nullish().transform((v) => v || null),
+  priority: zPriority.default("normal"),
+});
+export type TaskInput = z.infer<typeof taskInput>;
+
+export const taskPatch = taskInput.partial().extend({
+  id: z.string().uuid(),
+});
+export type TaskPatch = z.infer<typeof taskPatch>;
+
+export const taskStatusChange = z.object({
+  id: z.string().uuid(),
+  status: z.enum(TASK_STATUSES),
+});
+
+/* ------------------------------------------------------------------ */
+/*  Habits                                                            */
+/* ------------------------------------------------------------------ */
+
+export const habitInput = z.object({
+  name: z.string().trim().min(1).max(80),
+  cadence: z.string().trim().min(1, "e.g. daily, 3x/week, mon,wed,fri").max(40),
+  durationMin: z.coerce.number().int().min(5).max(480),
+  preferredWindow: z.string().trim().max(40).nullish().transform((v) => v || null),
+  bucketId: optionalUuid,
+  active: z.boolean().default(true),
+});
+export type HabitInput = z.infer<typeof habitInput>;
+
+/* ------------------------------------------------------------------ */
+/*  Day profile                                                       */
+/* ------------------------------------------------------------------ */
+
+const windowTuple = z.tuple([hm, hm]);
+const weeklyWindows = z.object({
+  mon: z.array(windowTuple).default([]),
+  tue: z.array(windowTuple).default([]),
+  wed: z.array(windowTuple).default([]),
+  thu: z.array(windowTuple).default([]),
+  fri: z.array(windowTuple).default([]),
+  sat: z.array(windowTuple).default([]),
+  sun: z.array(windowTuple).default([]),
+});
+
+const protectedBlock = z.object({
+  label: z.string().trim().min(1).max(40),
+  start: hm,
+  end: hm,
+});
+
+export const dayProfileInput = z
+  .object({
+    workWindows: weeklyWindows,
+    sharpHours: weeklyWindows,
+    dailyCapMin: z.coerce.number().int().min(30).max(1440),
+    protectedBlocks: z.array(protectedBlock).max(20),
+    minBlockMin: z.coerce.number().int().min(5).max(240),
+    maxBlockMin: z.coerce.number().int().min(15).max(600),
+    breakMin: z.coerce.number().int().min(0).max(120),
+  })
+  .refine((v) => v.maxBlockMin >= v.minBlockMin, {
+    message: "Max block length must be at least the min block length",
+    path: ["maxBlockMin"],
+  });
+export type DayProfileInput = z.infer<typeof dayProfileInput>;
+
+/** Small helper: flatten a ZodError into "field: message" strings for the UI. */
+export function flattenIssues(err: z.ZodError): string[] {
+  return err.issues.map((i) => {
+    const path = i.path.join(".");
+    return path ? `${path}: ${i.message}` : i.message;
+  });
+}
