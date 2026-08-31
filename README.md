@@ -90,9 +90,16 @@ Fills empty tables with four generically-named buckets, a realistic day profile,
 two habits, and fifteen tasks spread across categories and due dates:
 
 ```bash
-npm run db:seed            # only runs if the DB is empty
-npm run db:seed -- --force # wipe buckets / tasks / habits first, then reseed
+npm run db:seed            # only runs on an empty database
+npm run db:seed -- --force # wipe + reseed — shows exactly what it will delete
+                           # and waits for you to type "yes" in a real terminal
 ```
+
+The seed records the ids it creates (`seed_runs` table). Without `--force` it
+**refuses** if the database holds any task it did not create itself, so it can
+never silently clobber data you entered. `--force` prints the full deletion list
+(flagging anything not from a seed run) and only proceeds on interactive
+confirmation — it aborts if stdin is not a TTY.
 
 ### 6. Run
 

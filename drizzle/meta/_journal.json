@@ -15,6 +15,13 @@
       "when": 1788181263517,
       "tag": "0001_first_queen_noir",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788182333045,
+      "tag": "0002_blue_terror",
+      "breakpoints": true
     }
   ]
 }

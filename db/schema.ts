@@ -309,6 +309,20 @@ export const chatMessages = pgTable("chat_messages", {
 });
 
 /* -------------------------------------------------------------------------- */
+/*  seed_runs — provenance for db/seed.ts, so it can tell its own rows apart   */
+/*  from anything the user entered and refuse to clobber real data.           */
+/* -------------------------------------------------------------------------- */
+
+export const seedRuns = pgTable("seed_runs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ranAt: timestamp("ran_at", { withTimezone: true }).notNull().defaultNow(),
+  /** ids created by this run */
+  taskIds: jsonb("task_ids").$type<string[]>().notNull(),
+  bucketIds: jsonb("bucket_ids").$type<string[]>().notNull(),
+  habitIds: jsonb("habit_ids").$type<string[]>().notNull(),
+});
+
+/* -------------------------------------------------------------------------- */
 /*  Inferred types — import these instead of hand-writing row shapes           */
 /* -------------------------------------------------------------------------- */
 

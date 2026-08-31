@@ -1,8 +1,15 @@
 /**
- * db/seed.ts — fills an empty database with something realistic to look at.
+ * db/seed.ts — fill an empty database with something realistic to look at.
  *
- *   npm run db:seed            # only runs if buckets + tasks are empty
- *   npm run db:seed -- --force # wipe buckets / tasks / habits first, then seed
+ *   npm run db:seed              # only runs on an empty database
+ *   npm run db:seed -- --force   # wipe + reseed, but ONLY after showing you
+ *                                # exactly what it will delete and asking you to
+ *                                # type "yes" in an interactive terminal
+ *
+ * Guard: the seed records the ids it creates in the `seed_runs` table. It will
+ * REFUSE to run if the database contains any task it did not create itself,
+ * unless --force is passed with interactive confirmation. It never deletes data
+ * silently.
  *
  * SPEC note 13: generically-named buckets only (never a real project name),
  * a realistic day profile, ~15 tasks spread across categories and due dates.
@@ -10,9 +17,9 @@
 
 import "./load-env";
 
-import { sql } from "drizzle-orm";
-import { db } from "./index";
-import { buckets, tasks, habits, dayProfile } from "./schema";
+import { createInterface } from "node:readline";
+import { db, closeDb } from "./index";
+import { buckets, tasks, habits, dayProfile, seedRuns } from "./schema";
 import { DEFAULT_DAY_PROFILE } from "../lib/day-profile";
 
 const force = process.argv.includes("--force");
@@ -25,29 +32,27 @@ function due(days: number): Date {
   return d;
 }
 
-async function main() {
-  const [{ count: bucketCount }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(buckets);
-  const [{ count: taskCount }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(tasks);
-
-  if ((bucketCount > 0 || taskCount > 0) && !force) {
-    console.log(
-      `Database already has ${bucketCount} buckets and ${taskCount} tasks — leaving it alone.\n` +
-        `Run  npm run db:seed -- --force  to wipe and reseed.`,
-    );
-    return;
+/** Every task id recorded by a previous seed run, or null if we can't tell. */
+async function knownSeededTaskIds(): Promise<Set<string> | null> {
+  try {
+    const runs = await db.select({ taskIds: seedRuns.taskIds }).from(seedRuns);
+    return new Set(runs.flatMap((r) => r.taskIds ?? []));
+  } catch {
+    return null; // table missing — migrations not run yet
   }
+}
 
-  if (force) {
-    console.log("Wiping tasks, habits, buckets…");
-    await db.delete(tasks);
-    await db.delete(habits);
-    await db.delete(buckets);
-  }
+function ask(question: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) =>
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer);
+    }),
+  );
+}
 
+async function insertSeedData() {
   // --- day profile (singleton) ---
   await db
     .insert(dayProfile)
@@ -72,23 +77,26 @@ async function main() {
   console.log(`Inserted ${bucketRows.length} buckets.`);
 
   // --- habits ---
-  await db.insert(habits).values([
-    {
-      name: "gym",
-      cadence: "3x/week",
-      durationMin: 60,
-      preferredWindow: "06:30-08:00",
-      bucketId: b.home,
-    },
-    {
-      name: "reading",
-      cadence: "daily",
-      durationMin: 30,
-      preferredWindow: "evening",
-      bucketId: b.learning,
-    },
-  ]);
-  console.log("Inserted 2 habits.");
+  const habitRows = await db
+    .insert(habits)
+    .values([
+      {
+        name: "gym",
+        cadence: "3x/week",
+        durationMin: 60,
+        preferredWindow: "06:30-08:00",
+        bucketId: b.home,
+      },
+      {
+        name: "reading",
+        cadence: "daily",
+        durationMin: 30,
+        preferredWindow: "evening",
+        bucketId: b.learning,
+      },
+    ])
+    .returning({ id: habits.id });
+  console.log(`Inserted ${habitRows.length} habits.`);
 
   // --- tasks: ~15, spread across categories, priorities, due dates ---
   const rows = [
@@ -109,15 +117,106 @@ async function main() {
     { title: "Think about next quarter's goals", notes: "Vague — needs breaking down.", bucketId: b.work, category: "deep", estimateMin: 60, dueAt: null, priority: "normal", status: "inbox", source: "dump" },
   ] as const;
 
-  await db.insert(tasks).values(rows.map((r) => ({ ...r })));
-  console.log(`Inserted ${rows.length} tasks.`);
+  const taskRows = await db
+    .insert(tasks)
+    .values(rows.map((r) => ({ ...r })))
+    .returning({ id: tasks.id });
+  console.log(`Inserted ${taskRows.length} tasks.`);
 
+  await db.insert(seedRuns).values({
+    taskIds: taskRows.map((r) => r.id),
+    bucketIds: bucketRows.map((r) => r.id),
+    habitIds: habitRows.map((r) => r.id),
+  });
+}
+
+async function main() {
+  const [currentTasks, currentBuckets, currentHabits] = await Promise.all([
+    db.select({ id: tasks.id, title: tasks.title }).from(tasks),
+    db.select({ id: buckets.id, name: buckets.name }).from(buckets),
+    db.select({ id: habits.id, name: habits.name }).from(habits),
+  ]);
+
+  const known = await knownSeededTaskIds();
+  const foreign = currentTasks.filter((t) => !known?.has(t.id));
+  const empty =
+    currentTasks.length === 0 && currentBuckets.length === 0 && currentHabits.length === 0;
+
+  // ---------------------------------------------------------------- no --force
+  if (!force) {
+    if (empty) {
+      await insertSeedData();
+      console.log("\nSeed complete.");
+      return;
+    }
+    if (foreign.length > 0) {
+      console.error(
+        `\nRefusing to seed: the database has ${foreign.length} task(s) that were ` +
+          `not created by a previous seed run` +
+          (known === null ? " (could not read seed history — run `npm run db:migrate`)" : "") +
+          `.\n\nExamples:\n` +
+          foreign.slice(0, 8).map((t) => `  · ${t.title}`).join("\n") +
+          (foreign.length > 8 ? `\n  · …and ${foreign.length - 8} more` : "") +
+          `\n\nThis looks like data you entered. If you really want to wipe it,\n` +
+          `run:  npm run db:seed -- --force\n` +
+          `(it will list everything it deletes and ask you to type "yes").`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    console.log(
+      `Database already seeded — ${currentTasks.length} task(s), all from a previous ` +
+        `seed run. Nothing to do.\nRun  npm run db:seed -- --force  to wipe and reseed.`,
+    );
+    return;
+  }
+
+  // ------------------------------------------------------------------- --force
+  console.log("\n--force: the following rows will be PERMANENTLY DELETED:\n");
+  console.log(`  tasks   (${currentTasks.length}):`);
+  for (const t of currentTasks) {
+    const mark = foreign.some((f) => f.id === t.id) ? "  ← NOT from a seed run" : "";
+    console.log(`    · ${t.title}${mark}`);
+  }
+  console.log(`  buckets (${currentBuckets.length}): ${currentBuckets.map((x) => x.name).join(", ") || "—"}`);
+  console.log(`  habits  (${currentHabits.length}): ${currentHabits.map((x) => x.name).join(", ") || "—"}`);
+
+  if (foreign.length > 0) {
+    console.log(
+      `\n  ⚠  ${foreign.length} of these task(s) were NOT created by a seed run — ` +
+        `they look like data you entered by hand.`,
+    );
+  }
+
+  if (!process.stdin.isTTY) {
+    console.error(
+      "\nRefusing: --force needs an interactive terminal so you can confirm. " +
+        "Aborting — nothing was deleted.",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const answer = await ask('\nType exactly "yes" to delete everything above and reseed: ');
+  if (answer.trim() !== "yes") {
+    console.log("Not confirmed — nothing was deleted.");
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log("\nWiping tasks, habits, buckets, seed history…");
+  await db.delete(tasks);
+  await db.delete(habits);
+  await db.delete(buckets);
+  await db.delete(seedRuns);
+
+  await insertSeedData();
   console.log("\nSeed complete.");
 }
 
 main()
-  .then(() => process.exit(0))
   .catch((err) => {
     console.error(err);
-    process.exit(1);
-  });
+    process.exitCode = 1;
+  })
+  .finally(() => closeDb());
