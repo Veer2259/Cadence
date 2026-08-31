@@ -171,7 +171,7 @@ Recurring things the user wants placed but that aren't tasks — gym, reading, a
 
 `input_snapshot` matters: when a plan comes out wrong, the user needs to see what the model was actually given. Do not skip it.
 
-Only one plan per date may be `draft` or `committed` at a time. Committing a new plan sets the previous one to `superseded`.
+At most one `committed` plan per date (enforced by a partial unique index). A rebalance `draft` (with `parent_plan_id` set) is allowed to coexist with its committed parent; "one `draft` per date" is enforced in code. Committing a plan sets every other live plan for that date to `superseded`.
 
 ### `blocks`
 

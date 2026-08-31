@@ -1,13 +1,13 @@
 /**
  * lib/plan.ts — persist and read time-blocked plans.
  *
- * SPEC section 3: only one plan per date may be `draft` or `committed` at a time.
- * "Plan my day" replaces the current draft; committing supersedes any prior
- * committed plan for that date.
+ * At most one committed plan per date. A rebalance draft is allowed to coexist
+ * with its committed parent (SPEC 6.3); the "one draft per date" half is
+ * enforced here. Committing supersedes every other live plan for that date.
  */
 
 import "server-only";
-import { and, eq, inArray, asc } from "drizzle-orm";
+import { and, eq, inArray, asc, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { plans, blocks, overflow, type Plan, type Block, type OverflowRow } from "@/db/schema";
 import { istDayInstant } from "@/lib/time";
@@ -20,10 +20,11 @@ export type LivePlan = {
   overflow: OverflowRow[];
 };
 
-/** The single draft-or-committed plan for an IST date, with its blocks + overflow. */
+/** The live plan for an IST date (a draft takes precedence over its committed parent). */
 export async function getLivePlan(dateStr: string): Promise<LivePlan | null> {
   const row = await db.query.plans.findFirst({
     where: and(eq(plans.date, dateStr), inArray(plans.status, ["draft", "committed"])),
+    orderBy: [sql`case when ${plans.status} = 'draft' then 0 else 1 end`],
   });
   if (!row) return null;
 
@@ -34,32 +35,56 @@ export async function getLivePlan(dateStr: string): Promise<LivePlan | null> {
   return { plan: row, blocks: bl, overflow: ov };
 }
 
+/** The committed, not-yet-debriefed plan for a date (the rebalance parent). */
+export async function getCommittedPlan(dateStr: string): Promise<LivePlan | null> {
+  const row = await db.query.plans.findFirst({
+    where: and(eq(plans.date, dateStr), eq(plans.status, "committed")),
+  });
+  if (!row) return null;
+  const [bl, ov] = await Promise.all([
+    db.select().from(blocks).where(eq(blocks.planId, row.id)).orderBy(asc(blocks.startAt)),
+    db.select().from(overflow).where(eq(overflow.planId, row.id)),
+  ]);
+  return { plan: row, blocks: bl, overflow: ov };
+}
+
 /**
- * Write a fresh draft plan for `dateStr` from a compose result, replacing any
- * existing draft for that date. Throws if a committed plan already exists —
- * re-planning a committed day is the rebalance path (Phase 4).
+ * Write a fresh draft plan for `dateStr`, replacing any existing draft.
+ * Without `parentPlanId` (a compose), it refuses if a committed plan exists.
+ * With `parentPlanId` (a rebalance), the committed parent is expected; the given
+ * `preservedBlocks` are copied verbatim into the new plan (SPEC 6.3).
  */
 export async function saveDraftPlan(args: {
   dateStr: string;
   model: string;
   input: ComposeInput;
   plan: PlanResult;
+  parentPlanId?: string;
+  preservedBlocks?: Block[];
+  /** stored as input_snapshot instead of `input` (used by rebalance) */
+  inputSnapshotOverride?: unknown;
 }): Promise<string> {
-  const { dateStr, model, input, plan } = args;
+  const { dateStr, model, input, plan, parentPlanId, preservedBlocks = [] } = args;
   const taskIds = new Set(input.tasks.map((t) => t.id));
   const rawByTask = new Map(input.tasks.map((t) => [t.id, t.rawEstimateMin]));
 
   return db.transaction(async (tx) => {
-    const existing = await tx.query.plans.findFirst({
-      where: and(eq(plans.date, dateStr), inArray(plans.status, ["draft", "committed"])),
+    const existingDraft = await tx.query.plans.findFirst({
+      where: and(eq(plans.date, dateStr), eq(plans.status, "draft")),
     });
-    if (existing?.status === "committed") {
-      throw new Error(
-        "A committed plan already exists for this date. Rebalance it instead of re-planning.",
-      );
+    if (existingDraft) {
+      await tx.delete(plans).where(eq(plans.id, existingDraft.id)); // cascades
     }
-    if (existing) {
-      await tx.delete(plans).where(eq(plans.id, existing.id)); // cascades to blocks / overflow
+
+    if (!parentPlanId) {
+      const committed = await tx.query.plans.findFirst({
+        where: and(eq(plans.date, dateStr), eq(plans.status, "committed")),
+      });
+      if (committed) {
+        throw new Error(
+          "A committed plan already exists for this date. Rebalance it instead of re-planning.",
+        );
+      }
     }
 
     const [planRow] = await tx
@@ -68,12 +93,30 @@ export async function saveDraftPlan(args: {
         date: dateStr,
         status: "draft",
         model,
-        inputSnapshot: input,
+        inputSnapshot: args.inputSnapshotOverride ?? input,
         outputSnapshot: plan,
+        parentPlanId: parentPlanId ?? null,
       })
       .returning();
 
-    const blockRows = plan.blocks.map((b) => {
+    // preserved blocks — verbatim, new plan id
+    const preservedRows = preservedBlocks.map((b) => ({
+      planId: planRow.id,
+      taskId: b.taskId,
+      habitId: b.habitId,
+      startAt: b.startAt,
+      endAt: b.endAt,
+      kind: b.kind,
+      title: b.title,
+      category: b.category,
+      reason: b.reason,
+      estimateMin: b.estimateMin,
+      rawEstimateMin: b.rawEstimateMin,
+      status: b.status,
+      actualMin: b.actualMin,
+    }));
+
+    const newRows = plan.blocks.map((b) => {
       const isTask = b.kind === "task" && !!b.taskId && taskIds.has(b.taskId);
       return {
         planId: planRow.id,
@@ -90,7 +133,9 @@ export async function saveDraftPlan(args: {
         status: "planned" as const,
       };
     });
-    if (blockRows.length) await tx.insert(blocks).values(blockRows);
+
+    const allRows = [...preservedRows, ...newRows];
+    if (allRows.length) await tx.insert(blocks).values(allRows);
 
     const overflowRows = plan.overflow
       .filter((o) => taskIds.has(o.taskId))
@@ -107,7 +152,7 @@ export async function saveDraftPlan(args: {
   });
 }
 
-/** Commit a draft: mark it committed, supersede any other live plan for its date. */
+/** Commit a draft: mark it committed, supersede every other live plan for its date. */
 export async function commitPlan(planId: string): Promise<void> {
   await db.transaction(async (tx) => {
     const target = await tx.query.plans.findFirst({ where: eq(plans.id, planId) });

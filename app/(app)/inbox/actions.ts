@@ -13,6 +13,10 @@ import {
   flattenIssues,
 } from "@/lib/schemas";
 import { z } from "zod";
+import { captureFromText } from "@/lib/ai/modes/capture";
+import { StructuredOutputError } from "@/lib/ai/provider";
+import { insertTask } from "@/lib/tasks";
+import type { CapturedTask } from "@/lib/ai/schemas";
 
 export type FormResult = { ok: boolean; errors: string[] };
 
@@ -105,4 +109,78 @@ export async function deleteTask(formData: FormData): Promise<void> {
   const id = z.string().uuid().parse(formData.get("id"));
   await db.delete(tasks).where(eq(tasks.id, id));
   revalidatePath("/inbox");
+}
+
+/* ------------------------------------------------------------------ */
+/*  Capture — brain dump -> parsed tasks (SPEC 6.2). No DB write here. */
+/* ------------------------------------------------------------------ */
+
+export type CaptureResponse =
+  | { ok: true; tasks: CapturedTask[]; clarifications: string[] }
+  | { ok: false; error: string };
+
+export async function captureBrainDump(
+  text: string,
+  answers?: string,
+): Promise<CaptureResponse> {
+  await requireAuth();
+  const trimmed = (text ?? "").trim();
+  if (trimmed.length < 3) return { ok: false, error: "Type a bit more first." };
+  if (trimmed.length > 5000) return { ok: false, error: "That's a lot — trim it under 5000 characters." };
+
+  try {
+    const result = await captureFromText(trimmed, answers?.trim() || undefined);
+    return { ok: true, tasks: result.tasks, clarifications: result.clarifications };
+  } catch (e) {
+    if (e instanceof StructuredOutputError) return { ok: false, error: e.message };
+    const status = (e as { status?: number } | undefined)?.status;
+    if (status === 429) return { ok: false, error: "Rate-limited — wait a minute and try again." };
+    if (status === 503 || status === 500) return { ok: false, error: "The parser is busy — try again shortly." };
+    console.error("[capture]", e);
+    return { ok: false, error: "Could not read that brain dump." };
+  }
+}
+
+const confirmSchema = z.object({
+  tasks: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1).max(200),
+        notes: z.string().nullable().optional(),
+        bucketName: z.string().nullable().optional(),
+        category: z.enum(["deep", "shallow", "calls", "admin", "errand", "personal"]),
+        estimateMin: z.coerce.number().int().min(1).max(1440).nullable().optional(),
+        dueDate: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .nullable()
+          .optional(),
+        priority: z.enum(["low", "normal", "high"]).default("normal"),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+
+export async function confirmCapturedTasks(input: unknown): Promise<FormResult> {
+  await requireAuth();
+  const parsed = confirmSchema.safeParse(input);
+  if (!parsed.success) return fail(flattenIssues(parsed.error));
+
+  for (const t of parsed.data.tasks) {
+    await insertTask({
+      title: t.title,
+      notes: t.notes ?? null,
+      bucketName: t.bucketName ?? null,
+      category: t.category,
+      estimateMin: t.estimateMin ?? null,
+      dueAt: t.dueDate ? istEndOfDayToUtc(t.dueDate) : null,
+      priority: t.priority,
+      status: "inbox",
+      source: "dump",
+    });
+  }
+
+  revalidatePath("/inbox");
+  return OK;
 }

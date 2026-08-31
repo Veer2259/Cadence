@@ -9,7 +9,14 @@
 
 import "server-only";
 import { GoogleGenAI } from "@google/genai";
-import type { GenerateJsonArgs, GenerateJsonResult, LlmAdapter } from "./types";
+import type {
+  ChatArgs,
+  ChatStep,
+  ChatTurn,
+  GenerateJsonArgs,
+  GenerateJsonResult,
+  LlmAdapter,
+} from "./types";
 
 let client: GoogleGenAI | undefined;
 function genai(): GoogleGenAI {
@@ -98,4 +105,66 @@ async function generateJson(args: GenerateJsonArgs): Promise<GenerateJsonResult>
   return { text, usage };
 }
 
-export const adapter: LlmAdapter = { name: "gemini", generateJson };
+/* ------------------------------------------------------------------ */
+/*  chat / tool-use                                                    */
+/* ------------------------------------------------------------------ */
+
+function turnsToContents(turns: ChatTurn[]): unknown[] {
+  return turns.map((t) => {
+    if (t.role === "user") return { role: "user", parts: [{ text: t.text }] };
+    if (t.role === "tool") {
+      return {
+        role: "user",
+        parts: t.responses.map((r) => ({
+          functionResponse: { name: r.name, response: r.response },
+        })),
+      };
+    }
+    if ("calls" in t) {
+      // Echo Gemini's own model turn back unchanged — it carries the
+      // thought_signature parts that Gemini 3 requires for tool continuity.
+      if (t.raw) return t.raw;
+      return {
+        role: "model",
+        parts: t.calls.map((c) => ({ functionCall: { name: c.name, args: c.args } })),
+      };
+    }
+    return { role: "model", parts: [{ text: t.text }] };
+  });
+}
+
+async function chatTurn(args: ChatArgs): Promise<ChatStep> {
+  const res = await genai().models.generateContent({
+    model: args.model,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    contents: turnsToContents(args.turns) as any,
+    config: {
+      systemInstruction: args.system,
+      temperature: 0.5,
+      tools: [
+        {
+          functionDeclarations: args.tools.map((t) => ({
+            name: t.name,
+            description: t.description,
+            parametersJsonSchema: t.parameters,
+          })),
+        },
+      ],
+    },
+  });
+
+  const calls = res.functionCalls ?? [];
+  if (calls.length > 0) {
+    return {
+      kind: "calls",
+      calls: calls.map((c) => ({
+        name: c.name ?? "",
+        args: (c.args ?? {}) as Record<string, unknown>,
+      })),
+      raw: res.candidates?.[0]?.content,
+    };
+  }
+  return { kind: "text", text: res.text ?? "" };
+}
+
+export const adapter: LlmAdapter = { name: "gemini", generateJson, chatTurn };

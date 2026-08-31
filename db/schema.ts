@@ -184,10 +184,12 @@ export const plans = pgTable(
     debriefSummary: text("debrief_summary"),
   },
   (t) => [
-    // "Only one plan per date may be draft or committed at a time."
-    uniqueIndex("plans_one_live_per_date")
+    // At most one committed plan per date. A rebalance draft is allowed to
+    // coexist with its committed parent (SPEC 6.3); saveDraftPlan enforces the
+    // "one draft per date" half in code.
+    uniqueIndex("plans_one_committed_per_date")
       .on(t.date)
-      .where(sql`${t.status} in ('draft', 'committed')`),
+      .where(sql`${t.status} = 'committed'`),
   ],
 );
 

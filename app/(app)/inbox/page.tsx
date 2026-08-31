@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { buckets as bucketsTable, tasks } from "@/db/schema";
 import { formatIst, istDateString } from "@/lib/time";
 import { AddTaskForm } from "@/components/inbox/add-task-form";
+import { BrainDump } from "@/components/inbox/brain-dump";
 import { InboxControls } from "@/components/inbox/inbox-controls";
 import { TaskRow, type TaskView } from "@/components/inbox/task-row";
 
@@ -69,6 +70,7 @@ export default async function InboxPage({
         </p>
       </div>
 
+      <BrainDump buckets={bucketOpts} />
       <AddTaskForm buckets={bucketOpts} />
 
       {waiting.length > 0 ? (

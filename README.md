@@ -15,7 +15,7 @@ an Anthropic adapter behind the same interface.
 | **1 — Foundation** | Schema, migrations, seed, auth, task/bucket CRUD, day-profile editor, inbox | **done** |
 | **2 — Compose & ribbon** | Provider interface, compose mode, post-validation, plan/block persistence, Today ribbon, commit | **done** |
 | **3 — Debrief & calibration** | One-screen debrief, time_log writes, EWMA calibration, carry-over with defer counting, calibrated estimates surfaced in block reasons | **done** |
-| 4 — Rebalance & chat rail | Mid-day replan, assistant, capture | not started |
+| **4 — Capture, rebalance, chat rail** | Inbox brain-dump → parsed tasks; mid-day rebalance with completed-block preservation by construction; assistant rail with 7 tools + confirmation cards | **done** |
 | 5 — Week & review | Deadline pressure, charts | not started |
 | 6 — Calendar, PWA, capture endpoint | Google Calendar sync, iOS shortcut | not started |
 

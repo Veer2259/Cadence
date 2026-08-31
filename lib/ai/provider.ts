@@ -15,7 +15,12 @@
 import "server-only";
 import { z } from "zod";
 import { activeProvider, modelFor, type ModelRole, type ProviderName } from "./models";
-import type { LlmAdapter } from "./adapters/types";
+import type {
+  ChatStep,
+  ChatTurn,
+  LlmAdapter,
+  ToolDeclaration,
+} from "./adapters/types";
 
 export type ChatMessage = { role: "user" | "model"; content: string };
 
@@ -171,4 +176,22 @@ export async function runStructured<T>({
 
   // Unreachable — the loop either returns or throws.
   throw new StructuredOutputError();
+}
+
+/* ------------------------------------------------------------------ */
+/*  Chat rail — one assistant turn (text or tool calls)               */
+/* ------------------------------------------------------------------ */
+
+export async function runChatTurn(args: {
+  role: ModelRole;
+  system: string;
+  turns: ChatTurn[];
+  tools: ToolDeclaration[];
+}): Promise<ChatStep> {
+  const provider = activeProvider();
+  const model = modelFor(args.role, provider);
+  const adapter = await getAdapter(provider);
+  return withBackoff(() =>
+    adapter.chatTurn({ model, system: args.system, turns: args.turns, tools: args.tools }),
+  );
 }

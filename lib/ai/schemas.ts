@@ -39,3 +39,41 @@ export const debriefSummarySchema = z.object({
   summary: z.string().max(280),
 });
 export type DebriefSummary = z.infer<typeof debriefSummarySchema>;
+
+/** Capture — parse a brain dump into discrete tasks (+ clarifying questions). SPEC 6.2. */
+export const captureSchema = z.object({
+  tasks: z.array(
+    z.object({
+      title: z.string(),
+      notes: z.string().nullable(),
+      bucketName: z.string().nullable(),
+      category: z.enum([
+        "deep",
+        "shallow",
+        "calls",
+        "admin",
+        "errand",
+        "personal",
+      ]),
+      estimateMin: z.number().int().nullable(),
+      dueAt: z.string().nullable(), // ISO
+      priority: z.enum(["low", "normal", "high"]),
+      possibleDuplicateOf: z.string().nullable(),
+    }),
+  ),
+  clarifications: z.array(z.string()),
+});
+export type CaptureResult = z.infer<typeof captureSchema>;
+export type CapturedTask = CaptureResult["tasks"][number];
+
+/** Week — the model's commentary on the deterministic pressure table. SPEC 6.5. */
+export const weekNoteSchema = z.object({
+  weekNote: z.string().max(400),
+  deadlines: z.array(
+    z.object({
+      taskId: z.string(),
+      line: z.string().max(160),
+    }),
+  ),
+});
+export type WeekNoteResult = z.infer<typeof weekNoteSchema>;

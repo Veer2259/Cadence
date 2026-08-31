@@ -61,8 +61,12 @@ export default async function TodayPage() {
   const realToday = true; // this screen always plans the current IST day
   const profile = await getOrCreateDayProfile();
   const weekday = istWeekdayKeyForDate(date);
-  const workRanges = toRanges(windowsForWeekday(profile.workWindows, weekday));
+  const workWindows = windowsForWeekday(profile.workWindows, weekday);
+  const workRanges = toRanges(workWindows);
   const sharpRanges = toRanges(windowsForWeekday(profile.sharpHours, weekday));
+
+  const nowMin = istMinutesOfDay(new Date());
+  const inWindow = workRanges.some((r) => nowMin >= r.startMin && nowMin <= r.endMin);
 
   const live = await getLivePlan(date);
 
@@ -88,6 +92,8 @@ export default async function TodayPage() {
         }
         planId={live?.plan.id}
         debriefed={!!live?.plan.debriefedAt}
+        isRebalance={!!live?.plan.parentPlanId}
+        inWindow={inWindow}
       />
     </div>
   );

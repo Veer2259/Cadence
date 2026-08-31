@@ -8,7 +8,13 @@
 
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import type { GenerateJsonArgs, GenerateJsonResult, LlmAdapter } from "./types";
+import type {
+  ChatArgs,
+  ChatStep,
+  GenerateJsonArgs,
+  GenerateJsonResult,
+  LlmAdapter,
+} from "./types";
 
 let client: Anthropic | undefined;
 function anthropic(): Anthropic {
@@ -55,4 +61,58 @@ async function generateJson(args: GenerateJsonArgs): Promise<GenerateJsonResult>
   };
 }
 
-export const adapter: LlmAdapter = { name: "anthropic", generateJson };
+async function chatTurn(args: ChatArgs): Promise<ChatStep> {
+  const res = await anthropic().messages.create({
+    model: args.model,
+    max_tokens: 2048,
+    system: args.system,
+    tools: args.tools.map((t) => ({
+      name: t.name,
+      description: t.description,
+      input_schema: t.parameters as Anthropic.Tool.InputSchema,
+    })),
+    messages: args.turns.map((t) => {
+      if (t.role === "user") return { role: "user" as const, content: t.text };
+      if (t.role === "tool") {
+        return {
+          role: "user" as const,
+          content: t.responses.map((r) => ({
+            type: "tool_result" as const,
+            tool_use_id: r.name,
+            content: JSON.stringify(r.response),
+          })),
+        };
+      }
+      if ("calls" in t) {
+        return {
+          role: "assistant" as const,
+          content: t.calls.map((c) => ({
+            type: "tool_use" as const,
+            id: c.name,
+            name: c.name,
+            input: c.args,
+          })),
+        };
+      }
+      return { role: "assistant" as const, content: t.text };
+    }),
+  });
+
+  const toolUses = res.content.filter((b) => b.type === "tool_use");
+  if (toolUses.length > 0) {
+    return {
+      kind: "calls",
+      calls: toolUses.map((b) => ({
+        name: b.type === "tool_use" ? b.name : "",
+        args: (b.type === "tool_use" ? b.input : {}) as Record<string, unknown>,
+      })),
+    };
+  }
+  const text = res.content
+    .filter((b) => b.type === "text")
+    .map((b) => (b.type === "text" ? b.text : ""))
+    .join("");
+  return { kind: "text", text };
+}
+
+export const adapter: LlmAdapter = { name: "anthropic", generateJson, chatTurn };

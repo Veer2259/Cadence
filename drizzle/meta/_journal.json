@@ -29,6 +29,13 @@
       "when": 1788190989080,
       "tag": "0003_flaky_proteus",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788192611798,
+      "tag": "0004_material_menace",
+      "breakpoints": true
     }
   ]
 }

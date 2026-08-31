@@ -22,10 +22,14 @@ export function PlanActions({
   status,
   planId,
   debriefed = false,
+  isRebalance = false,
+  inWindow = false,
 }: {
   status: "none" | "draft" | "committed";
   planId?: string;
   debriefed?: boolean;
+  isRebalance?: boolean;
+  inWindow?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -75,13 +79,15 @@ export function PlanActions({
             <Button onClick={() => run(() => commitTodayPlan(planId))} disabled={pending}>
               Commit plan
             </Button>
-            <Button
-              variant="quiet"
-              onClick={() => run(() => planMyDay(), true)}
-              disabled={pending}
-            >
-              {pending ? "Re-planning…" : "Re-plan"}
-            </Button>
+            {!isRebalance ? (
+              <Button
+                variant="quiet"
+                onClick={() => run(() => planMyDay(), true)}
+                disabled={pending}
+              >
+                {pending ? "Re-planning…" : "Re-plan"}
+              </Button>
+            ) : null}
             <Button
               variant="danger"
               onClick={() => run(() => discardTodayPlan(planId))}
@@ -89,11 +95,25 @@ export function PlanActions({
             >
               Discard
             </Button>
+            {isRebalance ? (
+              <span className="text-xs text-ink-muted">
+                Rebalance draft — committing supersedes the earlier plan.
+              </span>
+            ) : null}
           </>
         ) : null}
 
         {status === "committed" && !debriefed ? (
           <>
+            {inWindow ? (
+              <Link
+                href="/rebalance"
+                className="border border-rule bg-surface px-3 py-1.5 text-sm font-medium text-ink hover:border-ink"
+                style={{ borderRadius: "var(--radius)" }}
+              >
+                Rebalance
+              </Link>
+            ) : null}
             <Link
               href="/debrief"
               className="bg-ink px-3 py-1.5 text-sm font-medium text-paper"
@@ -101,9 +121,6 @@ export function PlanActions({
             >
               Debrief the day
             </Link>
-            <span className="text-xs text-ink-muted">
-              Rebalancing arrives in Phase 4.
-            </span>
           </>
         ) : null}
 
