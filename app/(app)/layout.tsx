@@ -14,7 +14,11 @@ export default async function AppLayout({
   return (
     <div className="flex min-h-full flex-col">
       <AppNav />
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">{children}</main>
+      {/* isolate: keep page-level z-indexes (e.g. the ribbon's) from ever
+          painting over the sticky header, which sits above at the root level */}
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 isolate">
+        {children}
+      </main>
       <ChatRail
         initial={history
           .filter((m) => m.role === "user" || m.role === "assistant")
