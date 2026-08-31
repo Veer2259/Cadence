@@ -11,14 +11,16 @@ import "server-only";
 import { desc, lt } from "drizzle-orm";
 import { db } from "@/db";
 import { chatMessages, type ChatMessage } from "@/db/schema";
-import { runChatTurn } from "@/lib/ai/provider";
+import { runChatTurn, CallBudget, ModelBudgetError } from "@/lib/ai/provider";
 import { CHAT_SYSTEM_PROMPT } from "@/lib/ai/prompts/chat";
 import { CHAT_TOOLS, executeChatTool } from "@/lib/ai/chat-tools";
 import type { ChatTurn } from "@/lib/ai/adapters/types";
 
 const HISTORY_FOR_CONTEXT = 30;
 const KEEP_MESSAGES = 200;
-const MAX_STEPS = 5;
+const MAX_STEPS = 4;
+/** whole-message ceiling on outbound calls across the tool loop */
+const CHAT_CALL_BUDGET = 6;
 
 export type PendingAction = { kind: "compose" | "rebalance"; params: Record<string, unknown> };
 
@@ -56,14 +58,25 @@ export async function runChat(userText: string): Promise<ChatReply> {
   let replyText = "";
   let pending: PendingAction | null = null;
   const toolTrace: { name: string; args: unknown; result: unknown }[] = [];
+  const budget = new CallBudget(CHAT_CALL_BUDGET, "chat");
 
   for (let step = 0; step < MAX_STEPS; step++) {
-    const out = await runChatTurn({
-      role: "compose",
-      system: CHAT_SYSTEM_PROMPT,
-      turns,
-      tools: CHAT_TOOLS,
-    });
+    let out;
+    try {
+      out = await runChatTurn({
+        role: "compose",
+        system: CHAT_SYSTEM_PROMPT,
+        turns,
+        tools: CHAT_TOOLS,
+        budget,
+      });
+    } catch (e) {
+      if (e instanceof ModelBudgetError) {
+        replyText = "That needed too many round-trips — try again with a narrower request.";
+        break;
+      }
+      throw e;
+    }
 
     if (out.kind === "text") {
       replyText = out.text.trim();

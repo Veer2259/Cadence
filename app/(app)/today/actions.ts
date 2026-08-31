@@ -6,7 +6,12 @@ import { requireAuth } from "@/lib/auth";
 import { istToday } from "@/lib/time";
 import { modelFor } from "@/lib/ai/models";
 import { composePlan } from "@/lib/ai/modes/compose";
-import { StructuredOutputError } from "@/lib/ai/provider";
+import {
+  StructuredOutputError,
+  ModelBudgetError,
+  DailyQuotaError,
+  dailyQuotaResetHint,
+} from "@/lib/ai/provider";
 import {
   getLivePlan,
   saveDraftPlan,
@@ -19,6 +24,12 @@ export type PlanActionResult =
   | { ok: false; error: string };
 
 function friendlyError(e: unknown): string {
+  if (e instanceof DailyQuotaError) {
+    return `Gemini's free daily request limit for ${e.model} is used up — ${dailyQuotaResetHint()}. Set GEMINI_COMPOSE_MODEL=gemini-3.5-flash-lite (500/day) to keep going, or wait for the reset.`;
+  }
+  if (e instanceof ModelBudgetError) {
+    return `The planner gave up after ${e.spent} model calls (the model kept rate-limiting or failing). Wait a minute, then try again.`;
+  }
   if (e instanceof StructuredOutputError) return e.message;
   const status = (e as { status?: number } | undefined)?.status;
   if (status === 429) {

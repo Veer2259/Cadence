@@ -8,7 +8,8 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { tasks, buckets } from "@/db/schema";
 import { istToday } from "@/lib/time";
-import { runStructured } from "@/lib/ai/provider";
+import { runStructured, CallBudget } from "@/lib/ai/provider";
+import { BUDGET } from "@/lib/ai/budget";
 import { captureSchema, type CaptureResult } from "@/lib/ai/schemas";
 import { CAPTURE_SYSTEM_PROMPT } from "@/lib/ai/prompts/capture";
 
@@ -35,6 +36,8 @@ export async function captureFromText(
 
   return runStructured({
     role: "capture",
+    purpose: "capture",
+    budget: new CallBudget(BUDGET.capture, "capture"),
     system: CAPTURE_SYSTEM_PROMPT,
     schema: captureSchema,
     schemaName: "captured_tasks",

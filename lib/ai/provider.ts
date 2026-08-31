@@ -1,26 +1,32 @@
 /**
  * lib/ai/provider.ts — the model boundary.
  *
- * Everything the app needs from an LLM goes through `runStructured()`. It:
- *   1. picks the provider from LLM_PROVIDER and the model from the role,
- *   2. asks the provider for JSON constrained to a schema derived from the Zod
- *      schema, retrying on HTTP 429 with exponential backoff (free-tier RPM),
- *   3. parses the reply with that same Zod schema, retrying ONCE with the
- *      validation error fed back (SPEC section 6),
- *   4. throws a typed StructuredOutputError if it still can't get valid output.
+ * Everything the app needs from an LLM goes through `runStructured()` (structured
+ * JSON) or `runChatTurn()` (tool use). Both:
+ *   1. pick the provider from LLM_PROVIDER and the model from the role,
+ *   2. reserve every outbound call against a shared CallBudget and log it,
+ *   3. retry on HTTP 429 / transient 5xx with exponential backoff — but never
+ *      past the budget,
+ *   4. (runStructured) parse with the Zod schema, retrying ONCE with the error
+ *      fed back, again only if the budget allows.
  *
- * The transport backoff and the Zod-validation retry are deliberately separate.
+ * The transport backoff, the Zod-validation retry, and the caller's own retry
+ * (e.g. compose's post-validation retry) all draw from the ONE budget, so a
+ * single "Plan my day" click can never exceed its cap (default 3 for compose).
  */
 
 import "server-only";
 import { z } from "zod";
 import { activeProvider, modelFor, type ModelRole, type ProviderName } from "./models";
+import { BUDGET, CallBudget, DailyQuotaError, classifyRateError } from "./budget";
 import type {
   ChatStep,
   ChatTurn,
   LlmAdapter,
   ToolDeclaration,
 } from "./adapters/types";
+
+export { CallBudget, ModelBudgetError, DailyQuotaError, dailyQuotaResetHint } from "./budget";
 
 export type ChatMessage = { role: "user" | "model"; content: string };
 
@@ -31,6 +37,10 @@ export type RunStructuredArgs<T> = {
   schema: z.ZodType<T>;
   /** Name for the schema / forced tool. Defaults to "result". */
   schemaName?: string;
+  /** Short label for logs, e.g. "compose". Defaults to `role`. */
+  purpose?: string;
+  /** Shared outbound-call ceiling. One is created per call if omitted. */
+  budget?: CallBudget;
 };
 
 /** Thrown when the model will not produce output that matches the schema. */
@@ -49,44 +59,53 @@ export class StructuredOutputError extends Error {
 /*  Transport backoff — HTTP 429 (rate limit) + transient 5xx          */
 /* ------------------------------------------------------------------ */
 
-function retryableStatus(err: unknown): number | null {
-  if (!err || typeof err !== "object") return null;
-  const e = err as { status?: number; code?: number | string; message?: string };
-  const status = typeof e.status === "number" ? e.status : Number(e.code);
-  if (status === 429 || status === 500 || status === 503) return status;
-  const msg = String(e.message ?? "");
-  if (/\b429\b|RESOURCE_EXHAUSTED|rate limit|quota/i.test(msg)) return 429;
-  if (/\b50[03]\b|UNAVAILABLE|overloaded|high demand/i.test(msg)) return 503;
-  return null;
-}
-
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+type CallCtx = {
+  budget: CallBudget;
+  provider: ProviderName;
+  model: string;
+  purpose: string;
+};
+
 /**
- * Retry `fn` on HTTP 429 (free-tier RPM) and transient 5xx with exponential
- * backoff + jitter. 429 gets a longer base delay than a passing 5xx spike.
+ * Run `fn`, reserving one budget call per attempt and logging it. Retries on
+ * 429 / transient 5xx with exponential backoff, but stops the moment the budget
+ * is spent (throwing the last transport error or a ModelBudgetError).
  */
-async function withBackoff<T>(
-  fn: () => Promise<T>,
-  { retries = 5, maxMs = 40000 }: { retries?: number; maxMs?: number } = {},
-): Promise<T> {
-  let attempt = 0;
+async function withBudget<T>(ctx: CallCtx, fn: () => Promise<T>): Promise<T> {
+  const { budget, provider, model, purpose } = ctx;
   for (;;) {
+    const n = budget.claim(); // throws ModelBudgetError when exhausted
+    console.log(`[ai] → ${provider}/${model} · ${purpose} · call ${n}/${budget.max}`);
+    const started = Date.now();
     try {
-      return await fn();
+      const out = await fn();
+      console.log(`[ai] ← ${provider}/${model} · ${purpose} · ok ${Date.now() - started}ms`);
+      return out;
     } catch (err) {
-      const status = retryableStatus(err);
-      if (status == null || attempt >= retries) throw err;
-      const baseMs = status === 429 ? 3000 : 1000;
-      const backoff = Math.min(maxMs, baseMs * 2 ** attempt);
-      const wait = backoff / 2 + Math.random() * (backoff / 2);
-      if (process.env.NODE_ENV !== "production") {
-        console.warn(
-          `[ai] ${status} — backing off ${Math.round(wait)}ms (attempt ${attempt + 1}/${retries})`,
-        );
+      const kind = classifyRateError(err);
+      const ms = Date.now() - started;
+
+      if (kind === "rpd") {
+        console.log(`[ai] ✗ ${provider}/${model} · ${purpose} · DAILY QUOTA exhausted`);
+        throw new DailyQuotaError(model);
       }
+      if (kind == null) {
+        console.log(`[ai] ✗ ${provider}/${model} · ${purpose} · ${ms}ms · ${(err as Error).message?.slice(0, 120)}`);
+        throw err;
+      }
+      if (budget.remaining <= 0) {
+        console.log(`[ai] ✗ ${provider}/${model} · ${purpose} · ${kind} · budget spent, giving up`);
+        throw err;
+      }
+      const baseMs = kind === "rpm" ? 3000 : 1000;
+      const backoff = Math.min(40000, baseMs * 2 ** (budget.spent - 1));
+      const wait = backoff / 2 + Math.random() * (backoff / 2);
+      console.log(
+        `[ai] ⟳ ${provider}/${model} · ${purpose} · ${kind} · backoff ${Math.round(wait)}ms (${budget.remaining} call(s) left)`,
+      );
       await sleep(wait);
-      attempt += 1;
     }
   }
 }
@@ -125,25 +144,25 @@ export async function runStructured<T>({
   messages,
   schema,
   schemaName = "result",
+  purpose,
+  budget,
 }: RunStructuredArgs<T>): Promise<T> {
   const provider = activeProvider();
   const model = modelFor(role, provider);
   const adapter = await getAdapter(provider);
   const jsonSchema = jsonSchemaFor(schema);
+  const label = purpose ?? role;
+  const b = budget ?? new CallBudget(2, label);
 
   const convo: ChatMessage[] = [...messages];
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    const started = Date.now();
-    const { text, usage } = await withBackoff(() =>
-      adapter.generateJson({ model, system, messages: convo, jsonSchema, schemaName }),
+  for (let attempt = 1; ; attempt++) {
+    const { text, usage } = await withBudget(
+      { budget: b, provider, model, purpose: attempt === 1 ? label : `${label}:zod-retry` },
+      () => adapter.generateJson({ model, system, messages: convo, jsonSchema, schemaName }),
     );
-
-    if (process.env.NODE_ENV !== "production") {
-      console.log(
-        `[ai] ${provider}/${model} ${role} attempt ${attempt} — ${Date.now() - started}ms` +
-          (usage ? ` — in ${usage.inputTokens} / out ${usage.outputTokens} tokens` : ""),
-      );
+    if (usage) {
+      console.log(`[ai]   ${label} tokens — in ${usage.inputTokens} / out ${usage.outputTokens}`);
     }
 
     let parsedJson: unknown;
@@ -160,11 +179,10 @@ export async function runStructured<T>({
       .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
       .join("; ");
 
-    if (attempt === 2) {
+    if (b.remaining <= 0) {
       throw new StructuredOutputError(undefined, issues);
     }
 
-    // Feed the error back and try once more.
     convo.push({ role: "model", content: text.slice(0, 4000) });
     convo.push({
       role: "user",
@@ -173,9 +191,6 @@ export async function runStructured<T>({
         `Reply again with ONLY a single JSON object that satisfies the schema.`,
     });
   }
-
-  // Unreachable — the loop either returns or throws.
-  throw new StructuredOutputError();
 }
 
 /* ------------------------------------------------------------------ */
@@ -187,11 +202,13 @@ export async function runChatTurn(args: {
   system: string;
   turns: ChatTurn[];
   tools: ToolDeclaration[];
+  budget?: CallBudget;
 }): Promise<ChatStep> {
   const provider = activeProvider();
   const model = modelFor(args.role, provider);
   const adapter = await getAdapter(provider);
-  return withBackoff(() =>
+  const b = args.budget ?? new CallBudget(BUDGET.chatTurn, "chat-turn");
+  return withBudget({ budget: b, provider, model, purpose: "chat-turn" }, () =>
     adapter.chatTurn({ model, system: args.system, turns: args.turns, tools: args.tools }),
   );
 }

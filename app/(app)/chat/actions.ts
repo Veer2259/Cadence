@@ -6,6 +6,7 @@ import { requireAuth } from "@/lib/auth";
 import { istToday } from "@/lib/time";
 import { modelFor } from "@/lib/ai/models";
 import { StructuredOutputError } from "@/lib/ai/provider";
+import { DailyQuotaError, dailyQuotaResetHint } from "@/lib/ai/provider";
 import { runChat, appendAssistantNote, type PendingAction } from "@/lib/ai/modes/chat";
 import { composePlan } from "@/lib/ai/modes/compose";
 import { rebalancePlan } from "@/lib/ai/modes/rebalance";
@@ -40,6 +41,12 @@ export async function sendChatMessage(content: string): Promise<SendResult> {
       },
     };
   } catch (e) {
+    if (e instanceof DailyQuotaError) {
+      return {
+        ok: false,
+        error: `Gemini's free daily request limit for ${e.model} is used up — ${dailyQuotaResetHint()}.`,
+      };
+    }
     if (e instanceof StructuredOutputError) return { ok: false, error: e.message };
     const status = (e as { status?: number } | undefined)?.status;
     if (status === 429) return { ok: false, error: "Rate-limited — try again in a minute." };

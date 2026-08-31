@@ -5,7 +5,12 @@ import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
 import { istToday } from "@/lib/time";
 import { modelFor } from "@/lib/ai/models";
-import { StructuredOutputError } from "@/lib/ai/provider";
+import {
+  StructuredOutputError,
+  ModelBudgetError,
+  DailyQuotaError,
+  dailyQuotaResetHint,
+} from "@/lib/ai/provider";
 import { rebalancePlan } from "@/lib/ai/modes/rebalance";
 import { saveDraftPlan } from "@/lib/plan";
 
@@ -38,6 +43,15 @@ export async function rebalanceAction(input: unknown): Promise<RebalanceActionRe
     revalidatePath("/today");
     return { ok: true, planId, violations: out.violations, retried: out.retried };
   } catch (e) {
+    if (e instanceof DailyQuotaError) {
+      return {
+        ok: false,
+        error: `Gemini's free daily request limit for ${e.model} is used up — ${dailyQuotaResetHint()}. Switch GEMINI_COMPOSE_MODEL to gemini-3.5-flash-lite for now.`,
+      };
+    }
+    if (e instanceof ModelBudgetError) {
+      return { ok: false, error: `Gave up after ${e.spent} model calls — wait a minute and try again.` };
+    }
     if (e instanceof StructuredOutputError) return { ok: false, error: e.message };
     const status = (e as { status?: number } | undefined)?.status;
     if (status === 429) return { ok: false, error: "Rate-limited — wait a minute and try again." };

@@ -34,14 +34,18 @@ const MODELS: Record<ProviderName, Record<ModelRole, string>> = {
   },
 };
 
-/** Optional env pins, for riding out a model outage without a code change. */
-const ENV_OVERRIDE: Partial<Record<`${ProviderName}:${ModelRole}`, string | undefined>> = {
-  "gemini:compose": process.env.GEMINI_COMPOSE_MODEL,
-  "gemini:capture": process.env.GEMINI_CAPTURE_MODEL,
-  "anthropic:compose": process.env.ANTHROPIC_COMPOSE_MODEL,
-  "anthropic:capture": process.env.ANTHROPIC_CAPTURE_MODEL,
-};
+/**
+ * Optional env pins, for riding out a model outage without a code change.
+ * Read at CALL time (not module load) so a running process picks up the right
+ * value and there is no import-order ambiguity — but note that `next dev` still
+ * needs a restart to see a new line in .env.local.
+ */
+function envOverride(provider: ProviderName, role: ModelRole): string | undefined {
+  const key = `${provider.toUpperCase()}_${role.toUpperCase()}_MODEL`;
+  const v = process.env[key];
+  return v && v.trim() ? v.trim() : undefined;
+}
 
 export function modelFor(role: ModelRole, provider: ProviderName = activeProvider()): string {
-  return ENV_OVERRIDE[`${provider}:${role}`] || MODELS[provider][role];
+  return envOverride(provider, role) ?? MODELS[provider][role];
 }

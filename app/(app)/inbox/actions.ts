@@ -14,7 +14,11 @@ import {
 } from "@/lib/schemas";
 import { z } from "zod";
 import { captureFromText } from "@/lib/ai/modes/capture";
-import { StructuredOutputError } from "@/lib/ai/provider";
+import {
+  StructuredOutputError,
+  DailyQuotaError,
+  dailyQuotaResetHint,
+} from "@/lib/ai/provider";
 import { insertTask } from "@/lib/tasks";
 import type { CapturedTask } from "@/lib/ai/schemas";
 
@@ -132,6 +136,9 @@ export async function captureBrainDump(
     const result = await captureFromText(trimmed, answers?.trim() || undefined);
     return { ok: true, tasks: result.tasks, clarifications: result.clarifications };
   } catch (e) {
+    if (e instanceof DailyQuotaError) {
+      return { ok: false, error: `Daily request limit for ${e.model} is used up — ${dailyQuotaResetHint()}.` };
+    }
     if (e instanceof StructuredOutputError) return { ok: false, error: e.message };
     const status = (e as { status?: number } | undefined)?.status;
     if (status === 429) return { ok: false, error: "Rate-limited — wait a minute and try again." };

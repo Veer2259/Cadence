@@ -4,7 +4,8 @@
  */
 
 import "server-only";
-import { runStructured, StructuredOutputError } from "@/lib/ai/provider";
+import { runStructured, StructuredOutputError, CallBudget } from "@/lib/ai/provider";
+import { BUDGET } from "@/lib/ai/budget";
 import { weekNoteSchema, type WeekNoteResult } from "@/lib/ai/schemas";
 import { WEEK_SYSTEM_PROMPT } from "@/lib/ai/prompts/week";
 import type { PressureResult } from "@/lib/pressure";
@@ -29,6 +30,8 @@ export async function weekCommentary(pressure: PressureResult): Promise<WeekNote
   try {
     return await runStructured({
       role: "compose",
+      purpose: "week-note",
+      budget: new CallBudget(BUDGET.week, "week-note"),
       system: WEEK_SYSTEM_PROMPT,
       schema: weekNoteSchema,
       schemaName: "week_note",

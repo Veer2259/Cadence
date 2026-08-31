@@ -6,7 +6,7 @@
  */
 
 import "server-only";
-import { runStructured, StructuredOutputError } from "@/lib/ai/provider";
+import { runStructured, StructuredOutputError, CallBudget } from "@/lib/ai/provider";
 import { debriefSummarySchema } from "@/lib/ai/schemas";
 import { DEBRIEF_SYSTEM_PROMPT } from "@/lib/ai/prompts/debrief";
 
@@ -46,6 +46,8 @@ export async function summariseDebrief(digest: DebriefDigest): Promise<string> {
   try {
     const { summary } = await runStructured({
       role: "capture",
+      purpose: "debrief-summary",
+      budget: new CallBudget(2, "debrief-summary"),
       system: DEBRIEF_SYSTEM_PROMPT,
       schema: debriefSummarySchema,
       schemaName: "debrief_summary",

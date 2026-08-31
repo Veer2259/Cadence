@@ -19,7 +19,8 @@ import {
   istWeekdayKeyForDate,
   windowsForWeekday,
 } from "@/lib/time";
-import { runStructured } from "@/lib/ai/provider";
+import { runStructured, CallBudget } from "@/lib/ai/provider";
+import { BUDGET } from "@/lib/ai/budget";
 import { planSchema, type PlanResult } from "@/lib/ai/schemas";
 import { COMPOSE_SYSTEM_PROMPT } from "@/lib/ai/prompts/compose";
 import { validatePlan } from "@/lib/ai/validate";
@@ -160,8 +161,14 @@ export async function composePlan(dateStr: string): Promise<ComposeOutcome> {
   const input = await buildComposeInput(dateStr);
   const payloadJson = JSON.stringify(input, null, 2);
 
+  // One hard ceiling across the initial call, its Zod retry, and the
+  // post-validation retry below: at most BUDGET.compose (3) outbound calls.
+  const budget = new CallBudget(BUDGET.compose, "compose");
+
   let plan = await runStructured({
     role: "compose",
+    purpose: "compose",
+    budget,
     system: COMPOSE_SYSTEM_PROMPT,
     schema: planSchema,
     schemaName: "day_plan",
@@ -171,10 +178,12 @@ export async function composePlan(dateStr: string): Promise<ComposeOutcome> {
   let violations = validatePlan(plan, input);
   let retried = false;
 
-  if (violations.length > 0) {
+  if (violations.length > 0 && budget.remaining > 0) {
     retried = true;
     plan = await runStructured({
       role: "compose",
+      purpose: "compose:post-validation-retry",
+      budget,
       system: COMPOSE_SYSTEM_PROMPT,
       schema: planSchema,
       schemaName: "day_plan",
@@ -192,6 +201,10 @@ export async function composePlan(dateStr: string): Promise<ComposeOutcome> {
       ],
     });
     violations = validatePlan(plan, input);
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`[ai]   compose finished — ${budget.spent}/${budget.max} calls used`);
   }
 
   return { input, plan, violations, retried };

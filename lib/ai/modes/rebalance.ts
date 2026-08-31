@@ -22,7 +22,8 @@ import {
   minutesToHm,
   windowsForWeekday,
 } from "@/lib/time";
-import { runStructured } from "@/lib/ai/provider";
+import { runStructured, CallBudget } from "@/lib/ai/provider";
+import { BUDGET } from "@/lib/ai/budget";
 import { planSchema, type PlanResult } from "@/lib/ai/schemas";
 import { REBALANCE_SYSTEM_PROMPT } from "@/lib/ai/prompts/rebalance";
 import {
@@ -209,8 +210,12 @@ export async function rebalancePlan(
     { role: "user", content: userMsg },
   ];
 
+  const budget = new CallBudget(BUDGET.compose, "rebalance");
+
   let newPlan = await runStructured({
     role: "compose",
+    purpose: "rebalance",
+    budget,
     system: REBALANCE_SYSTEM_PROMPT,
     schema: planSchema,
     schemaName: "rebalanced_plan",
@@ -226,10 +231,12 @@ export async function rebalancePlan(
   });
   let retried = false;
 
-  if (violations.length) {
+  if (violations.length && budget.remaining > 0) {
     retried = true;
     newPlan = await runStructured({
       role: "compose",
+      purpose: "rebalance:post-validation-retry",
+      budget,
       system: REBALANCE_SYSTEM_PROMPT,
       schema: planSchema,
       schemaName: "rebalanced_plan",
