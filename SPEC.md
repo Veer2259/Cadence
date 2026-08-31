@@ -164,7 +164,10 @@ Recurring things the user wants placed but that aren't tasks — gym, reading, a
 | generated_at | timestamptz | |
 | model | text | which model produced it |
 | input_snapshot | jsonb | the exact payload sent to the model |
+| output_snapshot | jsonb | the model's validated result (blocks, overflow, calibrationNote) |
 | parent_plan_id | uuid nullable | set when this plan came from a rebalance |
+| debriefed_at | timestamptz nullable | set once the day is closed out; blocks a second debrief |
+| debrief_summary | text nullable | the two-line descriptive summary written at debrief |
 
 `input_snapshot` matters: when a plan comes out wrong, the user needs to see what the model was actually given. Do not skip it.
 
@@ -250,7 +253,7 @@ For the assistant rail. `id, role, content, tool_calls jsonb, created_at`. Keep 
 
 This is the feature that makes the app compound. Implement it exactly.
 
-**Recording.** At debrief, for every block with `status IN ('done','partial')` and a non-null `actual_min`, compute `sample = actual_min / raw_estimate_min`. Discard samples where `raw_estimate_min < 15` (noise) or where `sample > 5` (the block was clearly abandoned or misused).
+**Recording.** At debrief, for every **task** block (`kind = 'task'`) with `status IN ('done','partial')` and a non-null `actual_min`, compute `sample = actual_min / raw_estimate_min`. Discard samples where `raw_estimate_min < 15` (noise) or where `sample > 5` (the block was clearly abandoned or misused). Break, habit, and fixed blocks carry no user estimate and are not sampled.
 
 **Updating.** Exponentially weighted, `alpha = 0.3`:
 

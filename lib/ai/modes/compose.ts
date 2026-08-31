@@ -11,7 +11,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { tasks, commitments, habits, calibration } from "@/db/schema";
 import { getOrCreateDayProfile } from "@/lib/day-profile";
-import { applyCalibration, type CategoryRatio } from "@/lib/calibration";
+import { applyCalibration, isMaterialShift, type CategoryRatio } from "@/lib/calibration";
 import {
   IST,
   istWallToUtc,
@@ -68,8 +68,11 @@ export async function buildComposeInput(dateStr: string): Promise<ComposeInput> 
 
   const composeTasks: ComposeTask[] = activeTasks.map((t) => {
     const raw = t.estimateMin ?? DEFAULT_ESTIMATE_MIN;
-    const { calibratedMin } = applyCalibration(raw, calByCategory.get(t.category));
-    return {
+    const { calibratedMin, applied, ratio } = applyCalibration(
+      raw,
+      calByCategory.get(t.category),
+    );
+    const task: ComposeTask = {
       id: t.id,
       title: t.title,
       bucket: null, // bucket name is resolved lazily elsewhere; not needed by the planner as an id
@@ -80,6 +83,16 @@ export async function buildComposeInput(dateStr: string): Promise<ComposeInput> 
       priority: t.priority,
       deferCount: t.deferCount,
     };
+    if (applied && isMaterialShift(ratio)) {
+      const cal = calByCategory.get(t.category)!;
+      task.calibration = {
+        category: t.category,
+        ratio: Number(ratio.toFixed(2)),
+        deltaPct: Math.round((ratio - 1) * 100),
+        sampleN: cal.sampleN,
+      };
+    }
+    return task;
   });
 
   // --- commitments overlapping the IST day ---
@@ -134,8 +147,14 @@ export type ComposeOutcome = {
   retried: boolean;
 };
 
-const USER_INSTRUCTION =
-  "Here is today's planning payload as JSON. Produce the time-blocked plan.";
+const USER_INSTRUCTION = [
+  "Here is today's planning payload as JSON. Produce the time-blocked plan.",
+  "",
+  "Any task with a `calibration` object is one where this person's history moved",
+  "the estimate materially. Schedule with `calibratedEstimateMin`, and the reason",
+  "line for that block MUST name the shift in plain language, e.g. \"1h planned,",
+  "1h25 scheduled — you run ~40% over on deep work\" (use its category and deltaPct).",
+].join("\n");
 
 export async function composePlan(dateStr: string): Promise<ComposeOutcome> {
   const input = await buildComposeInput(dateStr);

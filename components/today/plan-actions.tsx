@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/controls";
 import {
   planMyDay,
@@ -20,9 +21,11 @@ const PROGRESS = [
 export function PlanActions({
   status,
   planId,
+  debriefed = false,
 }: {
   status: "none" | "draft" | "committed";
   planId?: string;
+  debriefed?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -89,10 +92,23 @@ export function PlanActions({
           </>
         ) : null}
 
-        {status === "committed" ? (
-          <span className="text-xs text-ink-muted">
-            Committed. Mid-day rebalancing arrives in Phase 4.
-          </span>
+        {status === "committed" && !debriefed ? (
+          <>
+            <Link
+              href="/debrief"
+              className="bg-ink px-3 py-1.5 text-sm font-medium text-paper"
+              style={{ borderRadius: "var(--radius)" }}
+            >
+              Debrief the day
+            </Link>
+            <span className="text-xs text-ink-muted">
+              Rebalancing arrives in Phase 4.
+            </span>
+          </>
+        ) : null}
+
+        {status === "committed" && debriefed ? (
+          <span className="text-xs text-ink-muted">Day closed.</span>
         ) : null}
       </div>
 

@@ -13,6 +13,15 @@ export type ComposeTask = {
   dueAt: string | null; // ISO
   priority: "low" | "normal" | "high";
   deferCount: number;
+  /** Present only when calibration was applied AND the shift is material
+   *  (ratio >= 1.25 or <= 0.8). The planner must name this in the block reason. */
+  calibration?: {
+    category: string;
+    ratio: number;
+    /** signed percentage the calibrated estimate moved vs. the raw one */
+    deltaPct: number;
+    sampleN: number;
+  };
 };
 
 export type ComposeCommitment = { title: string; start: string; end: string };

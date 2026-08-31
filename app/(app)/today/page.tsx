@@ -75,7 +75,9 @@ export default async function TodayPage() {
         <p className="judgment mt-1 text-sm text-ink-muted">
           {live
             ? live.plan.status === "committed"
-              ? "Committed plan."
+              ? live.plan.debriefedAt
+                ? "Day closed."
+                : "Committed plan."
               : "Draft plan — review, then commit."
             : "No plan yet."}
         </p>
@@ -85,6 +87,7 @@ export default async function TodayPage() {
           live ? (live.plan.status === "committed" ? "committed" : "draft") : "none"
         }
         planId={live?.plan.id}
+        debriefed={!!live?.plan.debriefedAt}
       />
     </div>
   );
@@ -107,6 +110,7 @@ export default async function TodayPage() {
 
   const output = (live.plan.outputSnapshot ?? null) as PlanResult | null;
   const calibrationNote = output?.calibrationNote ?? null;
+  const debriefSummary = live.plan.debriefedAt ? live.plan.debriefSummary : null;
 
   // --- ribbon geometry ---
   const blocks: RibbonBlock[] = live.blocks.map((b) => {
@@ -165,10 +169,12 @@ export default async function TodayPage() {
     <div className="flex flex-col gap-5">
       {heading}
 
-      {calibrationNote ? (
-        <p
-          className="judgment border-l-2 border-rule pl-3 text-sm text-ink-muted"
-        >
+      {debriefSummary ? (
+        <p className="judgment border-l-2 border-settled pl-3 text-sm text-ink">
+          {debriefSummary}
+        </p>
+      ) : calibrationNote ? (
+        <p className="judgment border-l-2 border-rule pl-3 text-sm text-ink-muted">
           {calibrationNote}
         </p>
       ) : null}

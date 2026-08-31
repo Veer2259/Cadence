@@ -33,3 +33,9 @@ export const planSchema = z.object({
 export type PlanBlock = z.infer<typeof block>;
 export type PlanOverflowItem = z.infer<typeof overflowItem>;
 export type PlanResult = z.infer<typeof planSchema>;
+
+/** Debrief — a two-line factual summary of how the day went (SPEC 6.4). */
+export const debriefSummarySchema = z.object({
+  summary: z.string().max(280),
+});
+export type DebriefSummary = z.infer<typeof debriefSummarySchema>;
