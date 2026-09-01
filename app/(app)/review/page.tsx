@@ -1,6 +1,7 @@
 import { computeReview } from "@/lib/review";
 import { AccuracyChart, BucketChart, EnergyByHourChart } from "@/components/review/charts";
 import { MIN_DAYS } from "@/lib/energy";
+import { targetHistory, outcomeProjections } from "@/lib/goal-review";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,8 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 
 export default async function ReviewPage() {
   const r = await computeReview();
+  const history = await targetHistory(8);
+  const projections = await outcomeProjections();
   const latest = r.accuracy.at(-1);
 
   return (
@@ -38,6 +41,68 @@ export default async function ReviewPage() {
           Dark = last 7 days, light = last 30.
         </p>
         <BucketChart data={r.buckets} />
+      </Panel>
+
+      <Panel title="Weekly targets — hit and missed">
+        {history.length ? (
+          <ul className="flex flex-col gap-1">
+            {history.map((h, i) => (
+              <li key={i} className="flex items-baseline justify-between gap-2 border-b border-rule py-1 text-sm last:border-b-0">
+                <span className="min-w-0 flex-1 truncate text-ink">
+                  <span className="tabular mr-2 text-xs text-ink-muted">{h.weekStart}</span>
+                  {h.description}
+                  <span className="ml-1.5 text-xs text-ink-muted">{h.bucket}</span>
+                </span>
+                <span
+                  className={
+                    h.status === "hit"
+                      ? "tabular shrink-0 text-xs text-settled"
+                      : h.status === "missed"
+                        ? "tabular shrink-0 text-xs text-signal"
+                        : "tabular shrink-0 text-xs text-ink-muted"
+                  }
+                >
+                  {h.targetHours != null ? `${h.actualHours}h / ${h.targetHours}h · ` : ""}
+                  {h.status}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-ink-muted">
+            No weekly targets recorded yet. Set some on Goals and they show up here
+            once the week is reviewed.
+          </p>
+        )}
+      </Panel>
+
+      <Panel title="Outcomes — remaining weeks at your current rate">
+        {projections.length ? (
+          <ul className="flex flex-col gap-2">
+            {projections.map((p) => (
+              <li key={p.bucket} className="border-b border-rule pb-2 last:border-b-0">
+                <div className="flex items-baseline justify-between gap-2 text-sm">
+                  <span className="text-ink">{p.outcome}</span>
+                  <span className="tabular shrink-0 text-xs text-ink-muted">
+                    {p.bucket} · by {p.targetDate}
+                  </span>
+                </div>
+                {p.verdict ? (
+                  <p className="judgment mt-0.5 text-xs text-ink-muted">{p.verdict}</p>
+                ) : (
+                  <p className="judgment mt-0.5 text-xs text-ink-muted">
+                    {p.weeksLeft} week{p.weeksLeft === 1 ? "" : "s"} left. No weekly
+                    hour target set, so there is nothing to compare the rate against.
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-ink-muted">
+            No bucket has an outcome and a target date yet. Set one on Goals.
+          </p>
+        )}
       </Panel>
 
       <Panel title="Energy by time of day">

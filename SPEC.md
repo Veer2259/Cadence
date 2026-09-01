@@ -317,6 +317,16 @@ When `ratio >= 1.25` or `<= 0.8` and it materially changed a block, the model mu
 
 ---
 
+## 4b. Goal progress
+
+Descriptive only, per the weekly-review rule: report the gap, never prescribe.
+
+- `lib/goal-pressure.ts` — how far a weekly target is behind PACE, comparing hours logged (or tasks done, when a target has no hour figure) against elapsed weekday. Feeds compose.
+- `lib/goal-review.ts` — `targetHistory` (weekly targets hit/missed over 8 weeks with what was actually logged) and `outcomeProjections` ("4 weeks left. At 0h/week you get 0h; the 10h/week you set would give 40h — a gap of 40h.").
+- `lib/capacity.ts` — the evidence breakdown argues with: hours per bucket per week, best and worst week, calibration ratios, defer counts. Weeks with nothing logged are real zeros. Reports `thin` when there is too little history to say anything honest.
+
+Week shows hours per bucket against target and where each of this week's targets stands. Review shows targets hit versus missed and whether the remaining weeks cover the remaining work at the current rate.
+
 ## 5. Deadline pressure
 
 Powers the week screen. Compute server-side, deterministically — no model call needed for the arithmetic, only for the commentary.
