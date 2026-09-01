@@ -109,11 +109,18 @@ export function checkDayGeometry(
     }
   }
 
-  // --- daily cap (time inside fixed commitments counts) ---
-  const scheduled = clean.reduce((n, b) => n + (b.endMin - b.startMin), 0);
+  // --- daily cap ---
+  // The cap is a ceiling on WORK. Time inside fixed commitments counts (SPEC
+  // rule 6). Habits do not — football is not work, and charging a 2h habit
+  // against the cap makes the planner under-schedule on the days you have one.
+  // Breaks do not either: the planner inserts them itself as recovery, so
+  // billing them to the cap would charge you for its own scheduling decision.
+  const scheduled = clean
+    .filter((b) => b.kind !== "habit" && b.kind !== "break")
+    .reduce((n, b) => n + (b.endMin - b.startMin), 0);
   if (scheduled > ctx.dailyCapMin) {
     v.push(
-      `total scheduled time ${scheduled} min exceeds the daily cap of ${ctx.dailyCapMin} min`,
+      `total scheduled work ${scheduled} min exceeds the daily cap of ${ctx.dailyCapMin} min`,
     );
   }
 

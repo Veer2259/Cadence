@@ -92,6 +92,45 @@ test("exceeding the daily cap is flagged", () => {
   assert.ok(v.some((m) => /exceeds the daily cap/.test(m)), v.join("; "));
 });
 
+test("the daily cap counts work only — habits and breaks are free", () => {
+  const tight = { ...CTX, dailyCapMin: 300 };
+  // exactly at the cap: 2h + 3h of task work
+  const work = [b("deep", 9 * 60, 11 * 60), b("evening", 17 * 60, 20 * 60)];
+  assert.deepEqual(checkDayGeometry(work, tight), []);
+
+  // a 2h habit outside work hours must NOT push it over
+  const withHabit = [...work, b("Football", 6 * 60 + 30, 8 * 60 + 30, "habit")];
+  assert.deepEqual(checkDayGeometry(withHabit, tight), []);
+
+  // nor does a break the planner inserted (16:00 — clear of the 11:00 commitment)
+  const withBreak = [...work, b("Break", 16 * 60, 16 * 60 + 15, "break")];
+  assert.deepEqual(checkDayGeometry(withBreak, tight), []);
+
+  // a fixed commitment still counts (SPEC rule 6)
+  const withFixed = [...work, b("standup", 11 * 60, 11 * 60 + 30, "fixed")];
+  assert.ok(
+    checkDayGeometry(withFixed, tight).some((m) => /exceeds the daily cap/.test(m)),
+  );
+});
+
+test("a habit can never land on a protected block, at any hour", () => {
+  // sleep 23:30-06:30 wraps midnight; 03:00 is inside it
+  const night = {
+    ...CTX,
+    protectedBlocks: [{ label: "sleep", start: "23:30", end: "06:30" }],
+  };
+  assert.ok(
+    checkDayGeometry([b("Football", 3 * 60, 4 * 60, "habit")], night).some((m) =>
+      /scheduled over a protected block/.test(m),
+    ),
+  );
+  // but 06:30 start is clean — the interval check is half-open
+  assert.deepEqual(
+    checkDayGeometry([b("Football", 6 * 60 + 30, 8 * 60 + 30, "habit")], night),
+    [],
+  );
+});
+
 test("a block that ends before it starts is flagged and does not crash the other checks", () => {
   const v = checkDayGeometry(
     [b("inverted", 10 * 60, 9 * 60), b("fine", 15 * 60, 16 * 60)],

@@ -19,7 +19,9 @@ import type { ChatTurn } from "@/lib/ai/adapters/types";
 
 const HISTORY_FOR_CONTEXT = 30;
 const KEEP_MESSAGES = 200;
-const MAX_STEPS = 4;
+/** Routing can legitimately need: list_habits -> place_habit_today ->
+ *  trigger_rebalance -> final text. Four tool steps plus the reply. */
+const MAX_STEPS = 5;
 /** whole-message ceiling on outbound calls across the tool loop */
 const CHAT_CALL_BUDGET = 6;
 

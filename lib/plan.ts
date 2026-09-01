@@ -301,6 +301,82 @@ export async function applyBlockAdjustment(args: {
   return finishBlockEdit(dateStr, live.plan.id);
 }
 
+export type HabitPlacement = BlockEditResult & { moved?: boolean };
+
+/**
+ * Put a habit on the live plan at an explicit time. Used by the chat rail's
+ * `place_habit_today` when the person says "football tonight".
+ *
+ * If the habit is ALREADY on today's plan (the planner scheduled it, or they
+ * placed it earlier), its block is moved rather than a second one added —
+ * "football tonight" means the one football, at a different time. Otherwise a
+ * new block is inserted. Either way nothing else moves, and any conflict the
+ * placement creates is reported, not fixed.
+ */
+export async function placeHabitBlock(args: {
+  dateStr: string;
+  habitId: string;
+  title: string;
+  durationMin: number;
+  startMin: number;
+  endMin: number;
+  reason: string;
+}): Promise<HabitPlacement> {
+  const { dateStr, habitId, title, reason } = args;
+  const live = await getLivePlan(dateStr);
+  if (!live) {
+    return {
+      ok: false,
+      error: "There is no plan for today yet — build one first, then place the habit.",
+    };
+  }
+
+  const startMin = snap5(args.startMin);
+  const endMin = Math.max(startMin + 5, snap5(args.endMin));
+  const startAt = istDayInstant(dateStr, minutesToHm(startMin));
+  const endAt = istDayInstant(dateStr, minutesToHm(endMin));
+
+  // Already on the plan? Move that block instead of duplicating the habit.
+  const existing = live.blocks.find(
+    (b) =>
+      b.kind === "habit" &&
+      (b.habitId === habitId ||
+        b.title.trim().toLowerCase() === title.trim().toLowerCase()),
+  );
+
+  if (existing) {
+    // Never move a block that already happened.
+    if (existing.status === "done" || existing.status === "partial") {
+      return {
+        ok: false,
+        error: `"${title}" is already marked ${existing.status} today — leaving it where it is.`,
+      };
+    }
+    await db
+      .update(blocks)
+      .set({ startAt, endAt, habitId, estimateMin: endMin - startMin })
+      .where(eq(blocks.id, existing.id));
+    return { ...(await finishBlockEdit(dateStr, live.plan.id)), moved: true };
+  }
+
+  await db.insert(blocks).values({
+    planId: live.plan.id,
+    taskId: null,
+    habitId,
+    startAt,
+    endAt,
+    kind: "habit",
+    title,
+    category: "personal",
+    reason: reason.slice(0, 90),
+    estimateMin: endMin - startMin,
+    rawEstimateMin: args.durationMin,
+    status: "planned",
+  });
+
+  return { ...(await finishBlockEdit(dateStr, live.plan.id)), moved: false };
+}
+
 /** Remove one block from the live plan (the assistant's confirmed `drop`). */
 export async function dropPlanBlock(args: {
   dateStr: string;

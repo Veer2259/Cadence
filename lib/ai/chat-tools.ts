@@ -9,8 +9,9 @@
 import "server-only";
 import { and, eq, gte, inArray, isNull, sql, ilike } from "drizzle-orm";
 import { db } from "@/db";
-import { tasks, buckets, timeLog } from "@/db/schema";
+import { tasks, buckets, timeLog, habits } from "@/db/schema";
 import { insertTask, resolveBucketId } from "@/lib/tasks";
+import { narrowCadence, formatCadence } from "@/lib/habits";
 import {
   istEndOfDayToUtc,
   istToday,
@@ -19,7 +20,7 @@ import {
   minutesToHm,
 } from "@/lib/time";
 import { computePressure } from "@/lib/pressure";
-import { getLivePlan, applyBlockAdjustment } from "@/lib/plan";
+import { getLivePlan, applyBlockAdjustment, placeHabitBlock } from "@/lib/plan";
 import { insertCommitment } from "@/lib/commitments";
 import type { ToolDeclaration } from "@/lib/ai/adapters/types";
 
@@ -91,6 +92,32 @@ export const CHAT_TOOLS: ToolDeclaration[] = [
         bucketName: { type: "string" },
         dueWithinDays: { type: "integer" },
       },
+    },
+  },
+  {
+    name: "list_habits",
+    description:
+      "List the person's habits (name, cadence, duration, preferred window). Read-only. " +
+      "Use this to check whether something they mentioned is an existing habit before routing it.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "place_habit_today",
+    description:
+      "Put an existing habit on today's plan as a habit block. Executes immediately. " +
+      "Use when the person says they are doing one of their habits today " +
+      "(\"football tonight\", \"gym at 6\"). Not for new one-off things — that is create_commitment.",
+    parameters: {
+      type: "object",
+      properties: {
+        habitName: { type: "string", description: "matched against existing habits" },
+        start: { type: "string", description: "IST clock time, HH:mm" },
+        end: {
+          type: "string",
+          description: "IST clock time, HH:mm. Defaults to start + the habit's duration.",
+        },
+      },
+      required: ["habitName", "start"],
     },
   },
   {
@@ -267,6 +294,75 @@ export async function executeChatTool(
         .orderBy(sql`${tasks.dueAt} asc nulls last`)
         .limit(60);
       return { result: { count: rows.length, tasks: rows } };
+    }
+
+    case "list_habits": {
+      const rows = await db.select().from(habits).where(eq(habits.active, true));
+      return {
+        result: {
+          habits: rows.map((h) => ({
+            name: h.name,
+            cadence: formatCadence(narrowCadence(h.cadence)),
+            durationMin: h.durationMin,
+            preferredWindow: h.preferredWindow,
+          })),
+        },
+      };
+    }
+
+    case "place_habit_today": {
+      const wanted = str(args.habitName);
+      const start = str(args.start);
+      if (!wanted || !start) {
+        return { result: { error: "habitName and start (HH:mm) are required" } };
+      }
+      const rows = await db.select().from(habits).where(eq(habits.active, true));
+      const matches = rows.filter((h) =>
+        h.name.toLowerCase().includes(wanted.toLowerCase()),
+      );
+      if (matches.length === 0) {
+        return {
+          result: {
+            error: "no habit by that name",
+            known: rows.map((h) => h.name),
+            hint: "If this is a one-off rather than a habit, use create_commitment.",
+          },
+        };
+      }
+      if (matches.length > 1) {
+        return {
+          result: { error: "multiple matching habits", matches: matches.map((h) => h.name) },
+        };
+      }
+      const habit = matches[0];
+      const startMin = hmToMinutes(start);
+      const endMin = str(args.end)
+        ? hmToMinutes(str(args.end)!)
+        : startMin + habit.durationMin;
+
+      const res = await placeHabitBlock({
+        dateStr: istToday(),
+        habitId: habit.id,
+        title: habit.name,
+        durationMin: habit.durationMin,
+        startMin,
+        endMin,
+        reason: "You said you're doing this today.",
+      });
+      if (!res.ok) return { result: { error: res.error } };
+      return {
+        result: {
+          placed: {
+            name: habit.name,
+            start: minutesToHm(startMin),
+            end: minutesToHm(Math.min(1440, endMin)),
+          },
+          // true = the habit was already on today's plan and was moved, not duplicated
+          movedExisting: res.moved === true,
+          violations: res.violations,
+          note: "Offer to rebalance the rest of the day; do not move other blocks yourself.",
+        },
+      };
     }
 
     case "create_commitment": {
