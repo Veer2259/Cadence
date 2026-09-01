@@ -8,6 +8,7 @@ import { logout } from "@/app/(app)/actions";
 const LINKS = [
   { href: "/today", label: "Today" },
   { href: "/inbox", label: "Inbox" },
+  { href: "/goals", label: "Goals" },
   { href: "/week", label: "Week" },
   { href: "/review", label: "Review" },
   { href: "/settings", label: "Settings" },

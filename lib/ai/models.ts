@@ -18,7 +18,7 @@ export function activeProvider(): ProviderName {
 }
 
 /** Roles the app asks a model to play. Each maps to a model per provider. */
-export type ModelRole = "compose" | "capture";
+export type ModelRole = "compose" | "capture" | "reason";
 
 const MODELS: Record<ProviderName, Record<ModelRole, string>> = {
   gemini: {
@@ -26,11 +26,16 @@ const MODELS: Record<ProviderName, Record<ModelRole, string>> = {
     compose: "gemini-3.7-flash",
     // Lightweight — capture parsing, classification, debrief summary.
     capture: "gemini-3.5-flash-lite",
+    // Strongest available — breakdown only. It runs a few times a quarter, so
+    // it can afford the best model and a tight daily cap; compose, which runs
+    // every day, stays on the cheaper one.
+    reason: "gemini-3.7-pro",
   },
   anthropic: {
     // SPEC section 6 strings.
     compose: "claude-sonnet-5",
     capture: "claude-haiku-4-5-20251001",
+    reason: "claude-opus-5",
   },
 };
 

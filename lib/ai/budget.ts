@@ -120,4 +120,8 @@ export const BUDGET = {
   week: 2,
   /** per assistant turn inside the chat tool loop */
   chatTurn: 2,
+  /** one breakdown TURN — the dialogue is many turns, each cheap to retry */
+  breakdownTurn: 2,
+  /** proposing the week's candidate tasks */
+  kickoff: 2,
 } as const;

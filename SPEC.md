@@ -351,6 +351,12 @@ or route handlers.
 
 ### Models
 
+Three roles, not two. `reason` is the strongest model available and is used by
+**breakdown only** — that mode runs a few times a quarter, so it can afford the
+best model and a tight daily cap. `compose` runs every day and stays on the
+cheaper model. `capture` stays on the lightweight one.
+
+
 Model IDs live in one file (`lib/ai/models.ts`) as named constants, keyed by
 provider and by role (`compose` | `capture`), each overridable by an env var
 (`GEMINI_COMPOSE_MODEL`, etc.) to ride out an outage without a code change.
@@ -547,6 +553,42 @@ Mostly not a model call. The UI presents the day's blocks pre-filled with their 
 
 On submit: write `time_log` rows, update `calibration`, mark unfinished tasks for carry-over with `defer_count + 1`, then one cheap Haiku call for a two-line descriptive summary. Descriptive only — no advice, no encouragement, no moralising. "Six hours logged. Deep work ran 35 minutes over across two blocks. The E-Cell call didn't happen."
 
+### 6.7 Breakdown — the conversational goal-setting mode
+
+Model role: `reason` (the strongest available). Budget: 2 calls per TURN; the
+dialogue is many turns, each cheap to retry.
+
+Setting a realistic outcome is a dialogue, not a form, so this mode interviews
+before it proposes. It asks about scope, what already exists, dependencies, and
+who else is involved — one or two questions at a time — and only then puts a
+draft on the table.
+
+**It argues with the person using their own numbers.** It is given
+`lib/capacity.ts` evidence: hours actually logged per bucket per week over the
+last 8 weeks (with the best and worst week, so a mean of 4 cannot hide a 0 and
+an 8), the calibration ratios, and how often work in that bucket is deferred.
+If they say they will ship in three weeks and the bucket averages four hours a
+week, it says so with the arithmetic. If the evidence is thin it says that
+rather than bluffing.
+
+It **never writes**. Each turn returns `{ reply, ready, proposal }`; the
+proposal lands in an editable review list and only what the person confirms —
+as edited — is saved. The transcript is kept on `buckets.breakdown_transcript`
+so the reasoning behind a set of targets is still readable months later.
+
+### 6.8 Weekly kickoff
+
+Model role: `compose`. Budget: 2 calls. Given this week's targets, propose the
+candidate tasks that would deliver them, with a category and an estimate sized
+using the person's calibration ratios.
+
+Sizes tasks to a single sitting where possible, does not propose more work than
+the week's target hours support (the gap goes in `note` with numbers rather
+than being padded away), and does not duplicate tasks already linked to a
+target. Like breakdown it **never writes** — candidates go to a review list
+with a keep/discard checkbox on each. Candidates pointing at a target id that
+was not supplied are dropped in code before the person ever sees them.
+
 ### 6.5 Week
 
 Deterministic pressure table from section 5, then a model call for `weekNote` and per-deadline one-liners. Also produces the weekly review numbers: hours per bucket, accuracy trend, defer leaderboard. Strictly descriptive.
@@ -640,7 +682,7 @@ Accessibility floor: responsive to 380px, visible keyboard focus, `prefers-reduc
 
 **Review** — accuracy ratio over time trending toward 1.0 (the single most motivating chart in the app), hours per bucket for the last 7 and 30 days, per-category calibration ratios with sample counts, and the defer leaderboard: tasks pushed most often.
 
-**Settings** — day profile editor (work windows, sharp hours, cap, protected blocks), bucket CRUD, habit CRUD, Google Calendar connect/disconnect, capture token display.
+**Goals** — the breakdown dialogue and the weekly kickoff, both proposing into a review list. **Settings** — day profile editor (work windows, sharp hours, cap, protected blocks), bucket CRUD, habit CRUD, Google Calendar connect/disconnect, capture token display.
 
 **Chat rail** — collapsible right panel on desktop, bottom sheet on mobile. Present on every screen.
 

@@ -77,3 +77,56 @@ export const weekNoteSchema = z.object({
   ),
 });
 export type WeekNoteResult = z.infer<typeof weekNoteSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  Breakdown — the conversational goal-setting mode (SPEC 6.7)        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One breakdown turn. The mode either keeps interviewing (`question`) or puts
+ * a draft on the table (`proposal`). It never writes: the proposal goes to a
+ * review list the person confirms or edits.
+ */
+export const breakdownTurnSchema = z.object({
+  /** what to say next — the question, the challenge, or the summary */
+  reply: z.string().max(1200),
+  /** true once there is enough to propose something concrete */
+  ready: z.boolean(),
+  proposal: z
+    .object({
+      outcome: z.string().max(300),
+      outcomeTargetDate: z.string().nullable(),
+      weeklyTargets: z.array(
+        z.object({
+          weekStart: z.string(),
+          description: z.string().max(300),
+          targetHours: z.number().nullable(),
+        }),
+      ),
+      /** the capacity arithmetic behind the proposal, in plain language */
+      reasoning: z.string().max(600),
+    })
+    .nullable(),
+});
+export type BreakdownTurn = z.infer<typeof breakdownTurnSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  Weekly kickoff — candidate tasks for this week's targets (SPEC 6.8) */
+/* ------------------------------------------------------------------ */
+
+export const kickoffSchema = z.object({
+  candidates: z.array(
+    z.object({
+      title: z.string().max(200),
+      /** which weekly target this serves; must be one of the ids supplied */
+      weeklyTargetId: z.string(),
+      category: z.enum(["deep", "shallow", "calls", "admin", "errand", "personal"]),
+      estimateMin: z.number().int(),
+      /** one line: why this task, and why this size */
+      reason: z.string().max(160),
+    }),
+  ),
+  /** anything the person should know before accepting — capacity, gaps */
+  note: z.string().max(400).nullable(),
+});
+export type KickoffResult = z.infer<typeof kickoffSchema>;

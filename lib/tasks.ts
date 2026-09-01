@@ -29,6 +29,8 @@ export type InsertTaskInput = {
   priority?: "low" | "normal" | "high" | null;
   status?: "inbox" | "active";
   mustDoToday?: boolean;
+  /** OPTIONAL link to a week's target */
+  weeklyTargetId?: string | null;
   source: "dump" | "manual" | "voice" | "carryover";
 };
 
@@ -54,6 +56,7 @@ export async function insertTask(
       priority: input.priority ?? "normal",
       status: input.status ?? "active",
       mustDoToday: input.mustDoToday ?? false,
+      weeklyTargetId: input.weeklyTargetId ?? null,
       source: input.source,
     })
     .returning({ id: tasks.id, title: tasks.title });
