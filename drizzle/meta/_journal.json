@@ -64,6 +64,13 @@
       "when": 1788284964427,
       "tag": "0008_planning_layer_and_capture",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788292924740,
+      "tag": "0009_goal_layer",
+      "breakpoints": true
     }
   ]
 }

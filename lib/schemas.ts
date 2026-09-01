@@ -67,7 +67,7 @@ export const taskInput = z.object({
     .transform((v) => v ?? null),
   dueDate: ymd.nullish().transform((v) => v || null),
   priority: zPriority.default("normal"),
-  milestoneId: optionalUuid,
+  weeklyTargetId: optionalUuid,
 });
 export type TaskInput = z.infer<typeof taskInput>;
 
@@ -129,15 +129,28 @@ export const commitmentInput = z
 export type CommitmentInput = z.infer<typeof commitmentInput>;
 
 /* ------------------------------------------------------------------ */
-/*  Milestones — a name, a date, a bucket. Deliberately nothing more.  */
+/*  The goal layer                                                    */
 /* ------------------------------------------------------------------ */
 
-export const milestoneInput = z.object({
-  name: z.string().trim().min(1, "Give it a name").max(120),
-  targetDate: ymd,
-  bucketId: optionalUuid,
+export const bucketGoalInput = z.object({
+  bucketId: z.string().uuid(),
+  outcome: z.string().trim().max(300).nullish().transform((v) => v || null),
+  outcomeTargetDate: ymd.nullish().transform((v) => v || null),
+  status: z.enum(["active", "achieved", "abandoned"]).default("active"),
 });
-export type MilestoneInput = z.infer<typeof milestoneInput>;
+
+export const weeklyTargetInput = z.object({
+  bucketId: z.string().uuid(),
+  weekStart: ymd,
+  description: z.string().trim().min(1, "Say what the target is").max(300),
+  targetHours: z.coerce
+    .number()
+    .min(0)
+    .max(168)
+    .nullish()
+    .transform((v) => (v == null || Number.isNaN(v) ? null : v)),
+});
+export type WeeklyTargetInput = z.infer<typeof weeklyTargetInput>;
 
 /** Weekly target hours for a bucket. Empty clears it. */
 export const bucketTargetInput = z.object({

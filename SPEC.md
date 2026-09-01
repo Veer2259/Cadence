@@ -107,7 +107,18 @@ Projects or life areas. The user creates and retires these freely.
 | color | text | hex |
 | active | boolean default true | retired buckets keep their history |
 | priority_hint | text nullable | free text passed to the planner, e.g. "weekday priority" |
+| weekly_target_min | integer nullable | intended hours per week, in minutes. Intent only — nothing schedules against it |
+| outcome | text nullable | **the guiding star**: what "done" looks like, one sentence |
+| outcome_target_date | date nullable | when the outcome is meant to be true by |
+| status | enum | `active` | `achieved` | `abandoned` — set by hand, never inferred |
+| breakdown_transcript | jsonb nullable | the breakdown dialogue that produced the outcome and targets |
 | created_at | timestamptz | |
+
+A bucket with no `outcome` is just a label and behaves exactly as it did before
+the goal layer existed. The outcome is what lets the app answer "do my days add
+up to what I am trying to achieve" — it is not a project, and there is
+deliberately no place to put dependencies, sub-projects or a percent-complete
+field.
 
 ### `tasks`
 
@@ -129,6 +140,16 @@ Projects or life areas. The user creates and retires these freely.
 
 `inbox` means captured but not yet confirmed by the user. Only `active` tasks are eligible for planning.
 
+`weekly_target_id` is optional and must stay that way. A task with no target
+behaves exactly as it always has. If assigning a target were ever a
+precondition for planning a task, capture would stop happening — which costs
+more than the goal layer is worth.
+
+`must_do_today` differs from `priority`: priority *ranks*, this *constrains*.
+Compose runs a deterministic fit check before calling the model and refuses to
+plan at all if the must-do set cannot fit, naming the tasks and the shortfall,
+rather than quietly deferring one.
+
 ### `commitments`
 Things that cannot move. Meetings, classes, appointments.
 
@@ -140,6 +161,24 @@ Things that cannot move. Meetings, classes, appointments.
 | recurrence | text nullable | RRULE string, keep support minimal: daily/weekly-by-day |
 | source | enum | `manual` \| `gcal` |
 | gcal_event_id | text nullable | |
+
+### `weekly_targets`
+One week's slice of a bucket's outcome — the layer between "what I am trying to
+achieve" and "what I did today". Deliberately thin.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid pk | |
+| bucket_id | uuid fk | cascade on delete |
+| week_start | date | the IST Monday of the week this belongs to |
+| description | text | what the target is, in a line |
+| target_hours | numeric nullable | optional — a target can be a deliverable rather than an amount of time |
+| status | enum | `planned` | `hit` | `missed` | `partial` | `dropped` |
+| review_note | text nullable | one line written at review time about how it went |
+| created_at | timestamptz | |
+
+No dependencies, no nesting, no stored percent-complete: progress is derived
+from the tasks that link to a target, so it cannot drift from the actual work.
 
 ### `habits`
 Recurring things the user wants placed but that aren't tasks — gym, reading, a weekly call.

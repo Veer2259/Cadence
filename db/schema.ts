@@ -84,6 +84,22 @@ export const calibrationScopeEnum = pgEnum("calibration_scope", ["category", "bu
 /** How sharp the user felt. Ordered worst -> best so the ordinal is meaningful. */
 export const energyLevelEnum = pgEnum("energy_level", ["fried", "ok", "sharp"]);
 
+/** Where a bucket's outcome stands. Set by hand; nothing infers it. */
+export const bucketStatusEnum = pgEnum("bucket_status", [
+  "active",
+  "achieved",
+  "abandoned",
+]);
+
+/** Where one week's target ended up. `planned` until the week is reviewed. */
+export const weeklyTargetStatusEnum = pgEnum("weekly_target_status", [
+  "planned",
+  "hit",
+  "missed",
+  "partial",
+  "dropped",
+]);
+
 /* -------------------------------------------------------------------------- */
 /*  buckets — projects / life areas the user defines and retires freely       */
 /* -------------------------------------------------------------------------- */
@@ -100,6 +116,19 @@ export const buckets = pgTable("buckets", {
    * intent only — nothing schedules against it and nothing enforces it.
    */
   weeklyTargetMin: integer("weekly_target_min"),
+  /**
+   * The guiding star: what "done" looks like, in one sentence. A bucket with no
+   * outcome is just a label, and behaves exactly as it always has.
+   */
+  outcome: text("outcome"),
+  /** when the outcome is meant to be true by */
+  outcomeTargetDate: date("outcome_target_date"),
+  status: bucketStatusEnum("status").notNull().default("active"),
+  /**
+   * The breakdown dialogue that produced the outcome and its targets, kept so
+   * the reasoning behind them is still readable months later.
+   */
+  breakdownTranscript: jsonb("breakdown_transcript"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -125,8 +154,12 @@ export const tasks = pgTable(
     parentId: uuid("parent_id").references((): AnyPgColumn => tasks.id, {
       onDelete: "cascade",
     }),
-    /** optional link to a milestone; milestone progress is derived from these */
-    milestoneId: uuid("milestone_id").references(() => milestones.id, {
+    /**
+     * OPTIONAL link to a week's target. A task without one must behave exactly
+     * as it always has — if assigning a target were ever a precondition for
+     * planning a task, capture would stop happening.
+     */
+    weeklyTargetId: uuid("weekly_target_id").references(() => weeklyTargets.id, {
       onDelete: "set null",
     }),
     /**
@@ -180,27 +213,31 @@ export const habits = pgTable("habits", {
 });
 
 /* -------------------------------------------------------------------------- */
-/*  milestones — a name, a target date, a bucket. Deliberately nothing else.   */
+/*  weekly_targets — one week's slice of a bucket's outcome                    */
 /*                                                                             */
-/*  Not a project: no dependencies, no sub-milestones, no percent-complete     */
-/*  field. Progress is DERIVED from the tasks that link to it, so it cannot    */
-/*  drift out of sync with the work.                                          */
+/*  The layer between "what I am trying to achieve" and "what I did today".    */
+/*  Deliberately thin: a description, an optional hour target, a status. No    */
+/*  dependencies, no nesting, no percent-complete field.                      */
 /* -------------------------------------------------------------------------- */
 
-export const milestones = pgTable(
-  "milestones",
+export const weeklyTargets = pgTable(
+  "weekly_targets",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    name: text("name").notNull(),
-    /** IST calendar date it is aimed at */
-    targetDate: date("target_date").notNull(),
-    bucketId: uuid("bucket_id").references(() => buckets.id, { onDelete: "set null" }),
-    /** set by hand when the milestone is reached or abandoned */
-    completedAt: timestamp("completed_at", { withTimezone: true }),
-    archived: boolean("archived").notNull().default(false),
+    bucketId: uuid("bucket_id")
+      .notNull()
+      .references(() => buckets.id, { onDelete: "cascade" }),
+    /** IST Monday that starts the week this target belongs to */
+    weekStart: date("week_start").notNull(),
+    description: text("description").notNull(),
+    /** optional — a target can be a deliverable rather than an amount of time */
+    targetHours: numeric("target_hours", { precision: 5, scale: 2 }),
+    status: weeklyTargetStatusEnum("status").notNull().default("planned"),
+    /** one line written at review time about how it actually went */
+    reviewNote: text("review_note"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("milestones_target_date_idx").on(t.targetDate)],
+  (t) => [index("weekly_targets_week_idx").on(t.weekStart)],
 );
 
 /* -------------------------------------------------------------------------- */
@@ -447,7 +484,7 @@ export type DayProfile = typeof dayProfile.$inferSelect;
 export type NewDayProfile = typeof dayProfile.$inferInsert;
 export type EnergyLogRow = typeof energyLog.$inferSelect;
 export type NewEnergyLogRow = typeof energyLog.$inferInsert;
-export type Milestone = typeof milestones.$inferSelect;
-export type NewMilestone = typeof milestones.$inferInsert;
+export type WeeklyTarget = typeof weeklyTargets.$inferSelect;
+export type NewWeeklyTarget = typeof weeklyTargets.$inferInsert;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type NewChatMessage = typeof chatMessages.$inferInsert;

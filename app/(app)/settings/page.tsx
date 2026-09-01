@@ -7,8 +7,8 @@ import { DayProfileForm } from "@/components/settings/day-profile-form";
 import { BucketsPanel } from "@/components/settings/buckets-panel";
 import { HabitsPanel } from "@/components/settings/habits-panel";
 import { SharpHoursSuggestion } from "@/components/settings/sharp-hours-suggestion";
-import { MilestonesPanel } from "@/components/settings/milestones-panel";
-import { listMilestoneProgress } from "@/lib/milestones";
+import { GoalsPanel } from "@/components/settings/goals-panel";
+import { bucketGoals, weeklyTargetsFor, weekStartOf } from "@/lib/goals";
 import { loadEnergySamples } from "@/lib/energy-db";
 import { suggestSharpWindows } from "@/lib/energy";
 import { WEEKDAY_KEYS, istToday } from "@/lib/time";
@@ -52,7 +52,9 @@ export default async function SettingsPage() {
     .from(bucketsTable)
     .orderBy(desc(bucketsTable.active), asc(bucketsTable.name));
 
-  const milestoneRows = await listMilestoneProgress(istToday(), true);
+  const thisWeek = weekStartOf(istToday());
+  const goalBuckets = await bucketGoals();
+  const weekTargets = await weeklyTargetsFor(thisWeek);
 
   const allHabits = await db
     .select()
@@ -119,21 +121,13 @@ export default async function SettingsPage() {
       </Section>
 
       <Section
-        title="Milestones"
-        description="A name, a target date, a bucket. Progress is counted from the tasks you link to one — there is nothing else to maintain."
+        title="Goals"
+        description="The guiding star: what each bucket is for, and this week's slice of it. Linking a task to a target is always optional."
       >
-        <MilestonesPanel
-          milestones={milestoneRows.map((m) => ({
-            id: m.id,
-            name: m.name,
-            targetDate: m.targetDate,
-            bucketId: m.bucketId,
-            completedAt: m.completedAt ? m.completedAt.toISOString() : null,
-            archived: m.archived,
-            totalTasks: m.totalTasks,
-            doneTasks: m.doneTasks,
-          }))}
-          buckets={bucketOpts}
+        <GoalsPanel
+          goalBuckets={goalBuckets}
+          targets={weekTargets}
+          weekStart={thisWeek}
         />
       </Section>
 

@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { buckets as bucketsTable, tasks , milestones as milestonesTable } from "@/db/schema";
+import { buckets as bucketsTable, tasks , weeklyTargets as weeklyTargetsTable } from "@/db/schema";
 import { formatIst, istDateString } from "@/lib/time";
 import { AddTaskForm } from "@/components/inbox/add-task-form";
 import { BrainDump } from "@/components/inbox/brain-dump";
@@ -25,13 +25,12 @@ export default async function InboxPage({
     .orderBy(bucketsTable.name);
   const bucketName = new Map(allBuckets.map((b) => [b.id, b.name]));
 
-  // open milestones a task can be linked to
-  const allMilestones = await db
-    .select({ id: milestonesTable.id, name: milestonesTable.name })
-    .from(milestonesTable)
-    .where(eq(milestonesTable.archived, false))
-    .orderBy(milestonesTable.targetDate);
-  const milestoneName = new Map(allMilestones.map((m) => [m.id, m.name]));
+  // this week's targets a task MAY be linked to — always optional
+  const allTargets = await db
+    .select({ id: weeklyTargetsTable.id, name: weeklyTargetsTable.description })
+    .from(weeklyTargetsTable)
+    .orderBy(weeklyTargetsTable.weekStart);
+  const targetName = new Map(allTargets.map((m) => [m.id, m.name]));
 
   const rows = await db
     .select()
@@ -61,8 +60,8 @@ export default async function InboxPage({
     mustDoToday: t.mustDoToday,
     bucketId: t.bucketId,
     bucketName: t.bucketId ? (bucketName.get(t.bucketId) ?? null) : null,
-    milestoneId: t.milestoneId,
-    milestoneName: t.milestoneId ? (milestoneName.get(t.milestoneId) ?? null) : null,
+    weeklyTargetId: t.weeklyTargetId,
+    weeklyTargetName: t.weeklyTargetId ? (targetName.get(t.weeklyTargetId) ?? null) : null,
     dueDateValue: t.dueAt ? istDateString(t.dueAt) : "",
     dueLabel: t.dueAt ? formatIst(t.dueAt, "d MMM") : "",
   });
@@ -91,7 +90,7 @@ export default async function InboxPage({
           </h2>
           <ul className="border-t border-rule">
             {waiting.map((t) => (
-              <TaskRow key={t.id} task={t} buckets={bucketOpts} milestones={allMilestones} />
+              <TaskRow key={t.id} task={t} buckets={bucketOpts} targets={allTargets} />
             ))}
           </ul>
         </section>
@@ -110,7 +109,7 @@ export default async function InboxPage({
         {active.length > 0 ? (
           <ul className="border-t border-rule">
             {active.map((t) => (
-              <TaskRow key={t.id} task={t} buckets={bucketOpts} milestones={allMilestones} />
+              <TaskRow key={t.id} task={t} buckets={bucketOpts} targets={allTargets} />
             ))}
           </ul>
         ) : (

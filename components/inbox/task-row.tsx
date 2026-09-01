@@ -18,8 +18,8 @@ export type TaskView = {
   priority: string;
   status: "inbox" | "active" | "done" | "dropped";
   mustDoToday: boolean;
-  milestoneId: string | null;
-  milestoneName: string | null;
+  weeklyTargetId: string | null;
+  weeklyTargetName: string | null;
   estimateMin: number | null;
   deferCount: number;
   bucketId: string | null;
@@ -52,12 +52,12 @@ function StatusButton({
 
 export function TaskRow({
   task,
-  milestones = [],
+  targets = [],
   buckets,
 }: {
   task: TaskView;
   buckets: { id: string; name: string }[];
-  milestones?: { id: string; name: string }[];
+  targets?: { id: string; name: string }[];
 }) {
   const { editing, toggle, errors, pending, onSubmit, runVoid } =
     useEditorForm(patchTask);
@@ -68,7 +68,7 @@ export function TaskRow({
     task.priority !== "normal" ? task.priority : null,
     task.dueLabel ? `due ${task.dueLabel}` : null,
     task.deferCount > 0 ? `deferred ${task.deferCount}×` : null,
-    task.milestoneName ? `→ ${task.milestoneName}` : null,
+    task.weeklyTargetName ? `→ ${task.weeklyTargetName}` : null,
   ].filter(Boolean);
 
   function del() {
@@ -182,10 +182,10 @@ export function TaskRow({
               ))}
             </Select>
           </Labeled>
-          <Labeled label="Milestone">
-            <Select name="milestoneId" defaultValue={task.milestoneId ?? ""}>
+          <Labeled label="Weekly target" hint="optional">
+            <Select name="weeklyTargetId" defaultValue={task.weeklyTargetId ?? ""}>
               <option value="">— none —</option>
-              {milestones.map((m) => (
+              {targets.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
                 </option>
