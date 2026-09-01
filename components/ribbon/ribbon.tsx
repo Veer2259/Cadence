@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { adjustBlock, setBlockStatus } from "@/app/(app)/today/actions";
@@ -51,6 +51,16 @@ const TIGHT_PX = 26;
 const MICRO_PX = 16;
 /** A resize handle is only offered when the block is at least this tall. */
 const RESIZABLE_PX = 26;
+/** Height the inline status row costs, for the content-height arithmetic.
+ *  The row itself is auto-height — pinning it shorter than the buttons clipped
+ *  their bottom edge and handed those pixels to the resize handle. */
+const STATUS_ROW_PX = 28;
+/** At/above this height the status controls sit ON the block, always visible
+ *  and one tap away. Below it they live behind a pinned menu, because there is
+ *  genuinely no room — but they are still one tap to open. */
+const STATUS_INLINE_PX = 56;
+/** Padding + border the block box spends on itself, excluded from content maths. */
+const BLOCK_CHROME_PX = 6;
 
 function fmt(min: number): string {
   const h = Math.floor(min / 60) % 24;
@@ -124,22 +134,25 @@ const LOG_OPTIONS = [
 ] as const;
 
 /**
- * Mark a block during the day. Lives in the block's hover/focus panel so it is
- * reachable at ANY block height — a 15-minute block has no room for inline
- * controls, but it still has a panel. Hover on a pointer, one tap to focus on
- * touch, then one tap to log.
+ * The three status controls. Rendered directly on a block when it is tall
+ * enough, and inside a pinned menu when it is not.
+ *
+ * Never hover-dependent: marking a block is a primary action done many times a
+ * day, and it has to work identically with a mouse, a keyboard and a thumb.
  */
-function BlockLog({
+function StatusButtons({
   status,
   disabled,
   onPick,
+  size = "inline",
 }: {
   status: RibbonBlock["status"];
   disabled: boolean;
   onPick: (next: RibbonBlock["status"]) => void;
+  size?: "inline" | "menu";
 }) {
   return (
-    <div className="mt-1.5 flex items-center gap-1 border-t border-rule pt-1.5">
+    <div className={cn("flex items-center", size === "menu" ? "gap-1" : "gap-0.5")}>
       {LOG_OPTIONS.map((o) => {
         const active = status === o.key;
         return (
@@ -148,24 +161,69 @@ function BlockLog({
             type="button"
             disabled={disabled}
             aria-pressed={active}
-            // the block itself is a drag surface — do not start a gesture here
+            // the block is a drag surface — a press here must not start a gesture
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
               onPick(active ? "planned" : o.key);
             }}
             className={cn(
-              "border border-rule px-1.5 py-0.5 text-[10px] disabled:opacity-50",
+              "border border-rule disabled:opacity-50",
+              size === "menu" ? "px-2.5 py-1.5 text-[11px]" : "px-2 py-1 text-[10px]",
               active ? "bg-ink text-paper" : "bg-surface text-ink-muted hover:text-ink",
             )}
             style={{ borderRadius: "var(--radius)" }}
-            title={active ? "Tap again to clear" : `Mark ${o.label}`}
+            title={active ? `${o.label} — tap again to clear` : `Mark ${o.label}`}
           >
             {o.label}
           </button>
         );
       })}
     </div>
+  );
+}
+
+const STATUS_GLYPH: Record<RibbonBlock["status"], string> = {
+  planned: "○",
+  done: "✓",
+  partial: "◐",
+  skipped: "×",
+};
+
+/** The opener for a block too short to hold the controls inline. */
+function StatusChip({
+  status,
+  open,
+  onToggle,
+}: {
+  status: RibbonBlock["status"];
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-haspopup="true"
+      aria-expanded={open}
+      aria-label={`Status: ${status}. Change it.`}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      className={cn(
+        "absolute top-1/2 right-1 z-30 flex h-[15px] w-[15px] -translate-y-1/2 items-center justify-center border text-[10px] leading-none",
+        // the visual dot stays small so it does not crowd a sliver, but the
+        // TAP target is expanded well past it — 15px is not a thumb target
+        "before:absolute before:-inset-2 before:content-['']",
+        status === "planned"
+          ? "border-rule bg-surface text-ink-muted hover:border-ink hover:text-ink"
+          : "border-ink bg-ink text-paper",
+      )}
+      style={{ borderRadius: "var(--radius)" }}
+    >
+      {STATUS_GLYPH[status]}
+    </button>
   );
 }
 
@@ -199,8 +257,32 @@ export function Ribbon({
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [activeId, setActiveId] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>(initialWarnings);
+  /** id of the block whose status menu is pinned open (short blocks only) */
+  const [menuFor, setMenuFor] = useState<string | null>(null);
   const [saving, startSave] = useTransition();
   const gesture = useRef<Gesture | null>(null);
+
+  // A pinned menu closes on Escape or a press anywhere outside it. Nothing
+  // here depends on hover, so it behaves the same under a thumb as a mouse.
+  useEffect(() => {
+    if (!menuFor) return;
+    const close = () => setMenuFor(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    const onDown = (e: PointerEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (!el?.closest("[data-status-menu]") && !el?.closest("[data-status-chip]")) {
+        close();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown, true);
+    };
+  }, [menuFor]);
 
   const span = Math.max(1, windowEndMin - windowStartMin);
   const height = span * PX_PER_MIN;
@@ -277,6 +359,7 @@ export function Ribbon({
   }
 
   function pickStatus(blockId: string, next: RibbonBlock["status"]) {
+    setMenuFor(null);
     startSave(async () => {
       const res = await setBlockStatus({ date, blockId, status: next });
       if (!res.ok) {
@@ -406,10 +489,18 @@ export function Ribbon({
         {blocks.map((b) => {
           const p = posOf(b);
           const blockHeight = Math.max(6, bandHeight(p.startMin, p.endMin));
-          const micro = blockHeight < MICRO_PX;
-          const tight = blockHeight < TIGHT_PX;
-          const inlineReason = blockHeight >= INLINE_REASON_PX && !!b.reason;
-          const comfortable = blockHeight >= COMFORTABLE_REASON_PX;
+          const loggable = editable && b.kind !== "break";
+          // Tall enough to carry the controls on the block itself? That is the
+          // common case and it costs one tap. Everything shorter gets the chip.
+          const inlineStatus = loggable && blockHeight >= STATUS_INLINE_PX;
+          const chipStatus = loggable && !inlineStatus;
+          // the status row eats real height, so the text thresholds see what is left
+          const contentH =
+            blockHeight - BLOCK_CHROME_PX - (inlineStatus ? STATUS_ROW_PX : 0);
+          const micro = contentH < MICRO_PX;
+          const tight = contentH < TIGHT_PX;
+          const inlineReason = contentH >= INLINE_REASON_PX && !!b.reason;
+          const comfortable = contentH >= COMFORTABLE_REASON_PX;
           const isFixed = b.kind === "fixed";
           const isBreak = b.kind === "break";
           const canDrag = editable && !isBreak;
@@ -464,39 +555,74 @@ export function Ribbon({
               ) : null}
 
               {/* inline content, clipped to the proportional box */}
-              <div className="h-full overflow-hidden">
-                {micro ? null : (
-                  <BlockHeader block={b} tight={tight} atMin={p.startMin} toMin={p.endMin} />
-                )}
-                {inlineReason ? (
-                  <p
-                    className={cn(
-                      "judgment truncate text-ink-muted",
-                      comfortable ? "mt-0.5 text-[12px] leading-snug" : "text-[10px] leading-none",
-                    )}
-                  >
-                    {b.reason}
-                  </p>
-                ) : null}
-              </div>
-
-              {/* full untruncated reason on hover / focus — hidden while this
-                  block is being dragged */}
-              {(b.reason || (editable && b.kind !== "break")) && !dragging ? (
-                <div className="absolute top-full right-1 left-0 z-40 mt-0.5 hidden border border-ink bg-surface px-2 py-1.5 group-hover:block group-focus:block group-focus-within:block">
-                  <BlockHeader block={b} tight={false} atMin={p.startMin} toMin={p.endMin} />
-                  {b.reason ? (
-                    <p className="judgment mt-0.5 text-[12px] leading-snug text-ink-muted">
+              <div className="flex h-full flex-col overflow-hidden">
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  {micro ? null : (
+                    <BlockHeader block={b} tight={tight} atMin={p.startMin} toMin={p.endMin} />
+                  )}
+                  {inlineReason ? (
+                    <p
+                      className={cn(
+                        "judgment truncate text-ink-muted",
+                        comfortable
+                          ? "mt-0.5 text-[12px] leading-snug"
+                          : "text-[10px] leading-none",
+                      )}
+                    >
                       {b.reason}
                     </p>
                   ) : null}
-                  {editable && b.kind !== "break" ? (
-                    <BlockLog
+                </div>
+
+                {/* the primary action, on the block: no hover, no delay, one tap */}
+                {inlineStatus ? (
+                  <div className="relative z-30 shrink-0 pt-0.5">
+                    <StatusButtons
                       status={b.status}
                       disabled={saving}
                       onPick={(next) => pickStatus(b.id, next)}
                     />
-                  ) : null}
+                  </div>
+                ) : null}
+              </div>
+
+              {/* too short for inline controls — a chip that pins a menu open */}
+              {chipStatus && !dragging ? (
+                <span data-status-chip>
+                  <StatusChip
+                    status={b.status}
+                    open={menuFor === b.id}
+                    onToggle={() => setMenuFor(menuFor === b.id ? null : b.id)}
+                  />
+                </span>
+              ) : null}
+
+              {chipStatus && menuFor === b.id ? (
+                <div
+                  data-status-menu
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="absolute top-full right-0 z-50 mt-0.5 border border-ink bg-surface px-2 py-1.5"
+                  style={{ borderRadius: "var(--radius)" }}
+                >
+                  <p className="mb-1 truncate text-[11px] text-ink">{b.title}</p>
+                  <StatusButtons
+                    status={b.status}
+                    disabled={saving}
+                    onPick={(next) => pickStatus(b.id, next)}
+                    size="menu"
+                  />
+                </div>
+              ) : null}
+
+              {/* The untruncated reason, for READING. It holds no controls any
+                  more, so it is pointer-events-none: it can never swallow a
+                  click or trap the cursor on its way to something else. */}
+              {b.reason && !dragging && menuFor !== b.id ? (
+                <div className="pointer-events-none absolute top-full right-1 left-0 z-40 mt-0.5 hidden border border-ink bg-surface px-2 py-1.5 group-hover:block group-focus:block">
+                  <BlockHeader block={b} tight={false} atMin={p.startMin} toMin={p.endMin} />
+                  <p className="judgment mt-0.5 text-[12px] leading-snug text-ink-muted">
+                    {b.reason}
+                  </p>
                 </div>
               ) : null}
             </div>
