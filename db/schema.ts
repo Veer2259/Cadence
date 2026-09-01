@@ -81,6 +81,9 @@ export const overflowActionEnum = pgEnum("overflow_action", [
 
 export const calibrationScopeEnum = pgEnum("calibration_scope", ["category", "bucket"]);
 
+/** How sharp the user felt. Ordered worst -> best so the ordinal is meaningful. */
+export const energyLevelEnum = pgEnum("energy_level", ["fried", "ok", "sharp"]);
+
 /* -------------------------------------------------------------------------- */
 /*  buckets — projects / life areas the user defines and retires freely       */
 /* -------------------------------------------------------------------------- */
@@ -331,6 +334,31 @@ export const seedRuns = pgTable("seed_runs", {
 });
 
 /* -------------------------------------------------------------------------- */
+/*  energy_log — timestamped "how sharp am I right now" samples                */
+/*                                                                             */
+/*  Recorded by hand (a one-tap check-in on Today) and, for free, whenever a    */
+/*  rebalance asks for an energy level. Samples carry a minute-of-day so the    */
+/*  hour bucketing that tunes sharp_hours is plain integer maths and never      */
+/*  depends on the database's own timezone handling.                           */
+/* -------------------------------------------------------------------------- */
+
+export const energyLog = pgTable(
+  "energy_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** IST calendar date this sample belongs to */
+    date: date("date").notNull(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    /** minutes since IST midnight, 0..1439 */
+    minuteOfDay: integer("minute_of_day").notNull(),
+    level: energyLevelEnum("level").notNull(),
+    /** "checkin" (Today) or "rebalance" (answered on the replan form) */
+    source: text("source").notNull().default("checkin"),
+  },
+  (t) => [index("energy_log_date_idx").on(t.date)],
+);
+
+/* -------------------------------------------------------------------------- */
 /*  Inferred types — import these instead of hand-writing row shapes           */
 /* -------------------------------------------------------------------------- */
 
@@ -354,5 +382,7 @@ export type CalibrationRow = typeof calibration.$inferSelect;
 export type NewCalibrationRow = typeof calibration.$inferInsert;
 export type DayProfile = typeof dayProfile.$inferSelect;
 export type NewDayProfile = typeof dayProfile.$inferInsert;
+export type EnergyLogRow = typeof energyLog.$inferSelect;
+export type NewEnergyLogRow = typeof energyLog.$inferInsert;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type NewChatMessage = typeof chatMessages.$inferInsert;

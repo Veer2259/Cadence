@@ -21,6 +21,7 @@ import {
 } from "@/lib/plan";
 import { insertCommitment } from "@/lib/commitments";
 import { commitmentInput, flattenIssues } from "@/lib/schemas";
+import { recordEnergy } from "@/lib/energy-db";
 
 export type PlanActionResult =
   | { ok: true; planId: string; violations: string[]; retried: boolean }
@@ -149,4 +150,26 @@ export async function addCommitment(
   }
   revalidatePath("/today");
   return { ok: true, errors: [] };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Energy check-in                                                    */
+/* ------------------------------------------------------------------ */
+
+const energySchema = z.enum(["fried", "ok", "sharp"]);
+
+export type EnergyResult = { ok: boolean; error?: string };
+
+/**
+ * Record how sharp you feel right now. Stamped with the current time, because
+ * sharp_hours is a claim about hours — one value per day could never tune it.
+ */
+export async function logEnergy(level: unknown): Promise<EnergyResult> {
+  await requireAuth();
+  const parsed = energySchema.safeParse(level);
+  if (!parsed.success) return { ok: false, error: "Unknown energy level." };
+  await recordEnergy(parsed.data, "checkin");
+  revalidatePath("/today");
+  revalidatePath("/review");
+  return { ok: true };
 }

@@ -22,6 +22,8 @@ import {
 import { OverflowList, type OverflowView } from "@/components/ribbon/overflow-list";
 import { PlanActions } from "@/components/today/plan-actions";
 import { AddCommitment } from "@/components/today/add-commitment";
+import { EnergyCheckin } from "@/components/today/energy-checkin";
+import { latestEnergyToday } from "@/lib/energy-db";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +73,7 @@ export default async function TodayPage() {
   const inWindow = workRanges.some((r) => nowMin >= r.startMin && nowMin <= r.endMin);
 
   const live = await getLivePlan(date);
+  const latestEnergy = await latestEnergyToday();
 
   const heading = (
     <div className="flex items-start justify-between gap-4">
@@ -87,8 +90,9 @@ export default async function TodayPage() {
               : "Draft plan — review, then commit."
             : "No plan yet."}
         </p>
-        <div className="mt-2">
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
           <AddCommitment />
+          <EnergyCheckin latest={latestEnergy} />
         </div>
       </div>
       <PlanActions

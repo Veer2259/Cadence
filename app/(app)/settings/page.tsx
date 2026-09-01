@@ -6,6 +6,10 @@ import { narrowCadence } from "@/lib/habits";
 import { DayProfileForm } from "@/components/settings/day-profile-form";
 import { BucketsPanel } from "@/components/settings/buckets-panel";
 import { HabitsPanel } from "@/components/settings/habits-panel";
+import { SharpHoursSuggestion } from "@/components/settings/sharp-hours-suggestion";
+import { loadEnergySamples } from "@/lib/energy-db";
+import { suggestSharpWindows } from "@/lib/energy";
+import { WEEKDAY_KEYS } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +37,13 @@ function Section({
 
 export default async function SettingsPage() {
   const profile = await getOrCreateDayProfile();
+
+  // The energy log's view of when you are actually sharp, for the panel below
+  // the day-profile editor. A suggestion only — applying it is a button press.
+  const sharpSuggestion = suggestSharpWindows(await loadEnergySamples(30));
+  const aWorkingDay =
+    WEEKDAY_KEYS.find((d) => (profile.workWindows[d] ?? []).length > 0) ?? "mon";
+  const currentSharp = (profile.sharpHours[aWorkingDay] ?? []) as [string, string][];
 
   const allBuckets = await db
     .select()
@@ -72,6 +83,7 @@ export default async function SettingsPage() {
             protectedBlocks: profile.protectedBlocks,
           }}
         />
+        <SharpHoursSuggestion suggestion={sharpSuggestion} current={currentSharp} />
       </Section>
 
       <Section title="Buckets" description="Projects and life areas. Retiring one keeps its history.">

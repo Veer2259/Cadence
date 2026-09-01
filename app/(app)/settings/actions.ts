@@ -6,7 +6,10 @@ import { z } from "zod";
 import { db } from "@/db";
 import { buckets, dayProfile, habits } from "@/db/schema";
 import { requireAuth } from "@/lib/auth";
-import { validateWeeklyWindows, type WeeklyWindows } from "@/lib/time";
+import { validateWeeklyWindows, WEEKDAY_KEYS, type WeeklyWindows } from "@/lib/time";
+import { getOrCreateDayProfile } from "@/lib/day-profile";
+import { loadEnergySamples } from "@/lib/energy-db";
+import { suggestSharpWindows, MIN_DAYS } from "@/lib/energy";
 import {
   bucketInput,
   habitInput,
@@ -189,4 +192,43 @@ export async function deleteHabit(formData: FormData): Promise<void> {
   const id = z.string().uuid().parse(formData.get("id"));
   await db.delete(habits).where(eq(habits.id, id));
   revalidatePath("/settings");
+}
+
+/* ------------------------------------------------------------------ */
+/*  Sharp hours, tuned from the energy log                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Apply the energy log's suggested sharp hours to every weekday that already
+ * has a working window. Never runs on its own — the Settings panel shows the
+ * suggestion and this only fires when the person presses Apply.
+ */
+export async function applySuggestedSharpHours(): Promise<FormResult> {
+  await requireAuth();
+
+  const samples = await loadEnergySamples(30);
+  const suggestion = suggestSharpWindows(samples);
+  if (!suggestion.confident) {
+    return fail([
+      `Not enough history yet — ${suggestion.dayN} day(s) logged, ${MIN_DAYS} needed.`,
+    ]);
+  }
+
+  const profile = await getOrCreateDayProfile();
+  const next: WeeklyWindows = {};
+  for (const day of WEEKDAY_KEYS) {
+    const worksToday = (profile.workWindows[day] ?? []).length > 0;
+    // Days you never work keep whatever they had; there is no evidence for them.
+    next[day] = worksToday ? suggestion.windows.map((w) => [...w] as [string, string]) : (profile.sharpHours[day] ?? []);
+  }
+
+  const problems = validateWeeklyWindows(next);
+  if (problems.length) return fail(problems.map((m) => `sharp hours — ${m}`));
+
+  await db.update(dayProfile).set({ sharpHours: next }).where(eq(dayProfile.id, 1));
+
+  revalidatePath("/settings");
+  revalidatePath("/today");
+  revalidatePath("/review");
+  return OK;
 }

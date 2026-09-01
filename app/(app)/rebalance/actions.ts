@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
+import { recordEnergy } from "@/lib/energy-db";
 import { istToday } from "@/lib/time";
 import { modelFor } from "@/lib/ai/models";
 import {
@@ -29,6 +30,9 @@ export async function rebalanceAction(input: unknown): Promise<RebalanceActionRe
   if (!parsed.success) return { ok: false, error: "Could not read the rebalance form." };
 
   const date = istToday();
+  // A rebalance already asks how you feel — record it as a real timestamped
+  // sample rather than throwing the answer away after the replan.
+  await recordEnergy(parsed.data.energy, "rebalance");
   try {
     const out = await rebalancePlan(date, parsed.data);
     const planId = await saveDraftPlan({

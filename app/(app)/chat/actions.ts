@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
+import { recordEnergy } from "@/lib/energy-db";
 import { istToday } from "@/lib/time";
 import { modelFor } from "@/lib/ai/models";
 import { StructuredOutputError } from "@/lib/ai/provider";
@@ -115,6 +116,7 @@ export async function confirmChatAction(input: unknown): Promise<ConfirmResult> 
       await appendAssistantNote(note);
       return { ok: true, note, changed: false };
     }
+    await recordEnergy(energy, "rebalance");
     const out = await rebalancePlan(date, { account, energy });
     await saveDraftPlan({
       dateStr: date,
