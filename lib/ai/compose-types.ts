@@ -18,6 +18,19 @@ export type ComposeTask = {
    * compose refuses the plan instead. Separate from priority, which only ranks.
    */
   mustDoToday: boolean;
+  /**
+   * Present only when the task is linked to a week's target that is BEHIND
+   * pace. Evidence to weigh alongside dueAt and deferCount — never a hard
+   * constraint, and absent entirely when the target is on track.
+   */
+  goal?: {
+    bucket: string;
+    target: string;
+    /** "behind" or "slipping" */
+    state: string;
+    /** e.g. "1h of 10h with 50% of the week gone — 40 points behind pace" */
+    note: string;
+  };
   /** Present only when calibration was applied AND the shift is material
    *  (ratio >= 1.25 or <= 0.8). The planner must name this in the block reason. */
   calibration?: {

@@ -30,6 +30,8 @@ import { planSchema, type PlanResult } from "@/lib/ai/schemas";
 import { COMPOSE_SYSTEM_PROMPT } from "@/lib/ai/prompts/compose";
 import { validatePlan } from "@/lib/ai/validate";
 import { checkMustDoFit, MustDoOverflowError, type MustDoTask } from "@/lib/must-do";
+import { weeklyTargetsFor, weekStartOf } from "@/lib/goals";
+import { goalPressure } from "@/lib/goal-pressure";
 import type {
   ComposeInput,
   ComposeTask,
@@ -68,6 +70,34 @@ export async function buildComposeInput(
     sampleN: r.sampleN,
   }));
 
+  // --- goal pressure: which of this week's targets are behind pace ---
+  // Only targets that are actually behind produce a payload entry; an on-track
+  // target says nothing, so the planner is not nudged by noise.
+  const weekStart = weekStartOf(dateStr);
+  const dayIndexInWeek = Math.round(
+    (Date.parse(`${dateStr}T00:00:00Z`) - Date.parse(`${weekStart}T00:00:00Z`)) /
+      86_400_000,
+  );
+  const targets = await weeklyTargetsFor(weekStart);
+  const behindByTarget = new Map<string, NonNullable<ComposeTask["goal"]>>();
+  for (const tg of targets) {
+    const gp = goalPressure({
+      targetHours: tg.targetHours,
+      actualHours: tg.actualHours,
+      totalTasks: tg.totalTasks,
+      doneTasks: tg.doneTasks,
+      dayIndexInWeek,
+    });
+    if (gp.note && (gp.state === "behind" || gp.state === "slipping")) {
+      behindByTarget.set(tg.id, {
+        bucket: tg.bucketName,
+        target: tg.description,
+        state: gp.state,
+        note: gp.note,
+      });
+    }
+  }
+
   // --- tasks: active, top-level ---
   const activeTasks = await db
     .select()
@@ -92,6 +122,8 @@ export async function buildComposeInput(
       deferCount: t.deferCount,
       mustDoToday: t.mustDoToday,
     };
+    const goal = t.weeklyTargetId ? behindByTarget.get(t.weeklyTargetId) : undefined;
+    if (goal) task.goal = goal;
     if (applied && isMaterialShift(ratio)) {
       const cal = calByCategory.get(t.category)!;
       task.calibration = {
@@ -160,6 +192,11 @@ export type ComposeOutcome = {
 
 const USER_INSTRUCTION = [
   "Here is today's planning payload as JSON. Produce the time-blocked plan.",
+  "",
+  "A task carrying a `goal` object belongs to a weekly target that is behind",
+  "pace. Weigh that alongside its deadline and deferCount when ordering the day —",
+  "it is evidence, not a rule, and it never outranks a hard constraint. If it",
+  "changes where you put the block, say why in the reason using the numbers given.",
   "",
   "A task with `mustDoToday: true` is a HARD constraint. It must appear as a",
   "block in `blocks`. Putting one in `overflow` is not an option — the app has",

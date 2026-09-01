@@ -409,11 +409,26 @@ tier is ~5 requests/minute on the compose model.
   "tasks": [{
     "id":"...","title":"...","bucket":"...","category":"deep",
     "rawEstimateMin":90,"calibratedEstimateMin":126,
-    "dueAt":"2026-09-03T12:00:00Z","priority":"high","deferCount":2
+    "dueAt":"2026-09-03T12:00:00Z","priority":"high","deferCount":2,
+    "mustDoToday": false,
+    "goal": {                       // present ONLY when the task's weekly
+      "bucket":"thesis",            // target is behind pace; absent otherwise
+      "target":"first draft of ch.2",
+      "state":"behind",
+      "note":"1h of 10h with 50% of the week gone — 40 points behind pace"
+    }
   }],
   "calibration": [{"category":"deep","ratio":1.4,"sampleN":11}]
 }
 ```
+
+**Goal pressure.** A task linked to a `weekly_target` that is behind pace
+carries a `goal` object. It is computed in code (`lib/goal-pressure.ts`) by
+comparing hours logged — or tasks completed, when the target has no hour figure
+— against how much of the week has elapsed. Only targets that are *behind* or
+*slipping* appear; an on-track target says nothing, so the planner is not
+nudged by noise. It is evidence to weigh beside `dueAt` and `deferCount`, never
+a hard constraint, and it never outranks `mustDoToday`.
 
 **System prompt — use verbatim:**
 
