@@ -57,6 +57,13 @@
       "when": 1788273620453,
       "tag": "0007_must_do_today",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788284964427,
+      "tag": "0008_planning_layer_and_capture",
+      "breakpoints": true
     }
   ]
 }

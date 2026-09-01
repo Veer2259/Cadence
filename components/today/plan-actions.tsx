@@ -21,12 +21,23 @@ const PROGRESS = [
 export function PlanActions({
   status,
   planId,
+  date,
+  readOnly = false,
+  isToday = true,
   debriefed = false,
   isRebalance = false,
   inWindow = false,
 }: {
   status: "none" | "draft" | "committed";
   planId?: string;
+  /** the IST day being viewed; writes are scoped to it */
+  date?: string;
+  /** a past day — a record, so offer nothing that writes */
+  readOnly?: boolean;
+  /** is the viewed day the current IST day? decided on the server, which knows
+   *  the timezone — the client's UTC date is wrong for ~5.5h either side of
+   *  IST midnight */
+  isToday?: boolean;
   debriefed?: boolean;
   isRebalance?: boolean;
   inWindow?: boolean;
@@ -65,12 +76,21 @@ export function PlanActions({
     });
   }
 
+  // A past day is a record: show its plan, offer nothing that would change it.
+  if (readOnly) {
+    return (
+      <span className="text-xs text-ink-muted">
+        {status === "none" ? "No plan for this day." : "Past day — read only."}
+      </span>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         {status === "none" ? (
-          <Button onClick={() => run(planMyDay, true)} disabled={pending}>
-            {pending ? "Planning…" : "Plan my day"}
+          <Button onClick={() => run(() => planMyDay(date), true)} disabled={pending}>
+            {pending ? "Planning…" : isToday ? "Plan my day" : "Plan this day"}
           </Button>
         ) : null}
 
@@ -82,7 +102,7 @@ export function PlanActions({
             {!isRebalance ? (
               <Button
                 variant="quiet"
-                onClick={() => run(() => planMyDay(), true)}
+                onClick={() => run(() => planMyDay(date), true)}
                 disabled={pending}
               >
                 {pending ? "Re-planning…" : "Re-plan"}
@@ -105,7 +125,7 @@ export function PlanActions({
 
         {status === "committed" && !debriefed ? (
           <>
-            {inWindow ? (
+            {inWindow && isToday ? (
               <Link
                 href="/rebalance"
                 className="border border-rule bg-surface px-3 py-1.5 text-sm font-medium text-ink hover:border-ink"

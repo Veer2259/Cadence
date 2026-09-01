@@ -15,6 +15,8 @@ import {
   minutesToHm,
   toIntervals,
   overlaps,
+  addIstDays,
+  compareToToday,
   mergeIntervals,
   sumIntervals,
   subtractIntervals,
@@ -126,4 +128,28 @@ test("validateWeeklyWindows flags overlaps and bad times", () => {
     ["mon: windows overlap"],
   );
   assert.equal(validateWeeklyWindows({ tue: [["bad", "12:00"]] }).length, 1);
+});
+
+test("addIstDays moves whole IST calendar days in both directions", () => {
+  assert.equal(addIstDays("2026-09-01", 1), "2026-09-02");
+  assert.equal(addIstDays("2026-09-01", -1), "2026-08-31");
+  assert.equal(addIstDays("2026-09-01", 0), "2026-09-01");
+  // across a month and a year boundary
+  assert.equal(addIstDays("2026-08-31", 1), "2026-09-01");
+  assert.equal(addIstDays("2026-12-31", 1), "2027-01-01");
+  assert.equal(addIstDays("2027-01-01", -1), "2026-12-31");
+});
+
+test("compareToToday classifies past / today / future in IST", () => {
+  const now = new Date("2026-09-01T10:00:00+05:30");
+  assert.equal(compareToToday("2026-09-01", now), 0);
+  assert.equal(compareToToday("2026-08-31", now), -1);
+  assert.equal(compareToToday("2026-09-02", now), 1);
+});
+
+test("compareToToday uses the IST day, not the UTC day", () => {
+  // 20:00 UTC on 31 Aug is already 01:30 on 1 Sep in IST
+  const lateUtc = new Date("2026-08-31T20:00:00Z");
+  assert.equal(compareToToday("2026-09-01", lateUtc), 0);
+  assert.equal(compareToToday("2026-08-31", lateUtc), -1);
 });

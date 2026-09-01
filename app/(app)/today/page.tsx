@@ -8,6 +8,8 @@ import {
   istWeekdayKeyForDate,
   windowsForWeekday,
   hmToMinutes,
+  addIstDays,
+  compareToToday,
 } from "@/lib/time";
 import { getOrCreateDayProfile } from "@/lib/day-profile";
 import { getLivePlan, buildGeometryContext } from "@/lib/plan";
@@ -22,6 +24,7 @@ import {
 import { OverflowList, type OverflowView } from "@/components/ribbon/overflow-list";
 import { PlanActions } from "@/components/today/plan-actions";
 import { AddCommitment } from "@/components/today/add-commitment";
+import { DayNav } from "@/components/today/day-nav";
 import { EnergyCheckin } from "@/components/today/energy-checkin";
 import { latestEnergyToday } from "@/lib/energy-db";
 
@@ -60,9 +63,23 @@ function protectedRangesInWindow(
   return out;
 }
 
-export default async function TodayPage() {
-  const date = istToday();
-  const realToday = true; // this screen always plans the current IST day
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export default async function TodayPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const raw = typeof sp.date === "string" ? sp.date : undefined;
+  const date = raw && DATE_RE.test(raw) ? raw : istToday();
+
+  // Which day is this relative to now? Drives everything below: only today gets
+  // the now-line and the energy check-in, and only a past day is read-only.
+  const rel = compareToToday(date);
+  const realToday = rel === 0;
+  const isPast = rel === -1;
+
   const profile = await getOrCreateDayProfile();
   const weekday = istWeekdayKeyForDate(date);
   const workWindows = windowsForWeekday(profile.workWindows, weekday);
@@ -70,18 +87,27 @@ export default async function TodayPage() {
   const sharpRanges = toRanges(windowsForWeekday(profile.sharpHours, weekday));
 
   const nowMin = istMinutesOfDay(new Date());
-  const inWindow = workRanges.some((r) => nowMin >= r.startMin && nowMin <= r.endMin);
+  const inWindow =
+    realToday && workRanges.some((r) => nowMin >= r.startMin && nowMin <= r.endMin);
 
   const live = await getLivePlan(date);
-  const latestEnergy = await latestEnergyToday();
+  const latestEnergy = realToday ? await latestEnergyToday() : null;
 
   const heading = (
     <div className="flex items-start justify-between gap-4">
       <div>
         <h1 className="font-mono text-lg tracking-tight text-ink">
-          {formatIst(new Date(), "EEEE d MMMM")}
+          {formatIst(new Date(`${date}T12:00:00+05:30`), "EEEE d MMMM")}
         </h1>
+        <DayNav
+          date={date}
+          prev={addIstDays(date, -1)}
+          next={addIstDays(date, 1)}
+          today={istToday()}
+          rel={rel}
+        />
         <p className="judgment mt-1 text-sm text-ink-muted">
+          {isPast && !live ? "Nothing was planned." : null}
           {live
             ? live.plan.status === "committed"
               ? live.plan.debriefedAt
@@ -90,12 +116,17 @@ export default async function TodayPage() {
               : "Draft plan — review, then commit."
             : "No plan yet."}
         </p>
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <AddCommitment />
-          <EnergyCheckin latest={latestEnergy} />
-        </div>
+        {!isPast ? (
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <AddCommitment date={date} />
+            {realToday ? <EnergyCheckin latest={latestEnergy} /> : null}
+          </div>
+        ) : null}
       </div>
       <PlanActions
+        date={date}
+        readOnly={isPast}
+        isToday={realToday}
         status={
           live ? (live.plan.status === "committed" ? "committed" : "draft") : "none"
         }
@@ -115,9 +146,18 @@ export default async function TodayPage() {
           className="border border-rule bg-surface p-6 text-sm text-ink-muted"
           style={{ borderRadius: "var(--radius)" }}
         >
-          Nothing scheduled. Confirm some tasks in the inbox, then use{" "}
-          <span className="text-ink">Plan my day</span> — it reads your active
-          tasks and builds a realistic, time-blocked day.
+          {isPast ? (
+            <>No plan was committed for this day, so there is nothing to show.</>
+          ) : (
+            <>
+              Nothing scheduled. Confirm some tasks in the inbox, then use{" "}
+              <span className="text-ink">
+                {realToday ? "Plan my day" : "Plan this day"}
+              </span>{" "}
+              — it reads your active tasks and builds a realistic, time-blocked
+              day.
+            </>
+          )}
         </div>
       </div>
     );
@@ -189,7 +229,8 @@ export default async function TodayPage() {
 
   // Positional checks over the plan as it stands now — so a manual drag that
   // broke something still shows the warning after a reload, not just on drop.
-  const editable = realToday && !live.plan.debriefedAt;
+  // A past day is a record, not a plan: no dragging, no logging, no edits.
+  const editable = !isPast && !live.plan.debriefedAt;
   const geometryWarnings = editable
     ? checkDayGeometry(
         blocks.map((b) => ({
@@ -244,6 +285,7 @@ export default async function TodayPage() {
         isToday={realToday}
         editable={editable}
         initialWarnings={geometryWarnings}
+        date={date}
       />
 
       <OverflowList items={overflowView} />

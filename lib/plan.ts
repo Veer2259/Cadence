@@ -464,6 +464,9 @@ export async function logBlockStatus(args: {
     .set({
       status,
       actualMin: status === "done" ? durationMin : null,
+      // the only record of WHEN this actually happened — start_at/end_at are
+      // the plan's intent and never move. Cleared when the log is undone.
+      loggedAt: status === "planned" ? null : new Date(),
     })
     .where(eq(blocks.id, blockId));
 

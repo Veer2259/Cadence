@@ -179,6 +179,7 @@ export function Ribbon({
   isToday,
   editable = false,
   initialWarnings = [],
+  date,
 }: {
   windowStartMin: number;
   windowEndMin: number;
@@ -191,6 +192,8 @@ export function Ribbon({
   editable?: boolean;
   /** Geometry violations the plan already has on load (from a prior manual edit). */
   initialWarnings?: string[];
+  /** the IST day being viewed — writes are scoped to it, not to "today" */
+  date?: string;
 }) {
   const router = useRouter();
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
@@ -275,7 +278,7 @@ export function Ribbon({
 
   function pickStatus(blockId: string, next: RibbonBlock["status"]) {
     startSave(async () => {
-      const res = await setBlockStatus({ blockId, status: next });
+      const res = await setBlockStatus({ date, blockId, status: next });
       if (!res.ok) {
         setWarnings([res.error]);
         return;
@@ -292,7 +295,7 @@ export function Ribbon({
     const startMin = g.curS;
     const endMin = g.curE;
     startSave(async () => {
-      const res = await adjustBlock({ blockId: g.id, startMin, endMin });
+      const res = await adjustBlock({ date, blockId: g.id, startMin, endMin });
       if (!res.ok) {
         setDrafts((cur) => {
           const n = { ...cur };

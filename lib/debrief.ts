@@ -10,11 +10,15 @@ import {
   plans,
   blocks,
   tasks,
+  habits,
   timeLog,
   calibration,
+  energyLog,
   type Block,
   type Plan,
 } from "@/db/schema";
+import { istMinutesOfDay } from "@/lib/time";
+import type { EnergyLevel } from "@/lib/energy";
 import { nextRatio, sampleFor } from "@/lib/calibration";
 import { summariseDebrief, type DebriefDigest } from "@/lib/ai/modes/debrief";
 
@@ -76,6 +80,40 @@ async function taskBucketMap(taskIds: string[]): Promise<Map<string, string | nu
   return new Map(rows.map((r) => [r.id, r.bucketId]));
 }
 
+/** Bucket id per habit — habit blocks carry their bucket on the habit, not a task. */
+async function habitBucketMap(habitIds: string[]): Promise<Map<string, string | null>> {
+  if (habitIds.length === 0) return new Map();
+  const rows = await db
+    .select({ id: habits.id, bucketId: habits.bucketId })
+    .from(habits)
+    .where(inArray(habits.id, habitIds));
+  return new Map(rows.map((r) => [r.id, r.bucketId]));
+}
+
+/**
+ * The energy sample nearest a moment, for the day being debriefed. Denormalised
+ * onto each time_log row so "does my accuracy vary by energy" is one query
+ * rather than a windowed join nobody will write.
+ */
+function nearestEnergy(
+  samples: { minuteOfDay: number; level: EnergyLevel }[],
+  at: Date,
+): EnergyLevel | null {
+  if (samples.length === 0) return null;
+  const target = istMinutesOfDay(at);
+  let best = samples[0];
+  let bestGap = Math.abs(best.minuteOfDay - target);
+  for (const s of samples.slice(1)) {
+    const gap = Math.abs(s.minuteOfDay - target);
+    if (gap < bestGap) {
+      best = s;
+      bestGap = gap;
+    }
+  }
+  // more than 3h away is not evidence about this block
+  return bestGap <= 180 ? best.level : null;
+}
+
 export async function submitDebrief(
   planId: string,
   entries: DebriefEntry[],
@@ -92,6 +130,17 @@ export async function submitDebrief(
     .orderBy(blocks.startAt);
 
   const entryByBlock = new Map(entries.map((e) => [e.blockId, e]));
+
+  const bucketByHabit = await habitBucketMap([
+    ...new Set(blockRows.filter((b) => b.habitId).map((b) => b.habitId as string)),
+  ]);
+  const energySamples = (
+    await db
+      .select({ minuteOfDay: energyLog.minuteOfDay, level: energyLog.level })
+      .from(energyLog)
+      .where(eq(energyLog.date, plan.date))
+  ).map((r) => ({ minuteOfDay: r.minuteOfDay, level: r.level as EnergyLevel }));
+  const energyForBlock = (at: Date) => nearestEnergy(energySamples, at);
 
   // --- resolve the final state of every block ---
   type Resolved = { block: Block; status: BlockStatus; actualMin: number | null };
@@ -162,7 +211,13 @@ export async function submitDebrief(
     for (const r of resolved) {
       await tx
         .update(blocks)
-        .set({ status: r.status, actualMin: r.actualMin })
+        .set({
+          status: r.status,
+          actualMin: r.actualMin,
+          // keep the live log-as-you-go timestamp if there is one; otherwise
+          // this debrief is the moment we learned about it
+          loggedAt: r.block.loggedAt ?? now,
+        })
         .where(eq(blocks.id, r.block.id));
     }
 
@@ -176,14 +231,32 @@ export async function submitDebrief(
           r.block.kind !== "break",
       )
       .map((r) => {
-        loggedMin += r.actualMin as number;
+        const actualMin = r.actualMin as number;
+        loggedMin += actualMin;
+        // When the block was logged we know roughly when the work ENDED, so the
+        // actual start is that minus its duration. Without a log we can only
+        // fall back to the planned time — and we say so by leaving them equal.
+        const endedAt = r.block.loggedAt ?? null;
+        const actualStart = endedAt
+          ? new Date(endedAt.getTime() - actualMin * 60_000)
+          : r.block.startAt;
         return {
           date: plan.date,
-          startAt: r.block.startAt,
-          endAt: new Date(r.block.startAt.getTime() + (r.actualMin as number) * 60_000),
-          durationMin: r.actualMin as number,
-          bucketId: r.block.taskId ? (bucketByTask.get(r.block.taskId) ?? null) : null,
+          startAt: actualStart,
+          endAt: new Date(actualStart.getTime() + actualMin * 60_000),
+          plannedStartAt: r.block.startAt,
+          durationMin: actualMin,
+          rawEstimateMin: r.block.rawEstimateMin,
+          // habits carry their own bucket; before this they logged bucketId null
+          // and their hours vanished from every per-bucket total
+          bucketId: r.block.taskId
+            ? (bucketByTask.get(r.block.taskId) ?? null)
+            : r.block.habitId
+              ? (bucketByHabit.get(r.block.habitId) ?? null)
+              : null,
           taskId: r.block.taskId,
+          kind: r.block.kind,
+          energyLevel: energyForBlock(actualStart),
           category: r.block.category,
           planned: true,
         };

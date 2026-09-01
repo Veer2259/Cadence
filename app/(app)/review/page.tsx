@@ -1,6 +1,8 @@
 import { computeReview } from "@/lib/review";
 import { AccuracyChart, BucketChart, EnergyByHourChart } from "@/components/review/charts";
 import { MIN_DAYS } from "@/lib/energy";
+import { listMilestoneProgress } from "@/lib/milestones";
+import { istToday } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 
 export default async function ReviewPage() {
   const r = await computeReview();
+  const milestones = await listMilestoneProgress(istToday());
   const latest = r.accuracy.at(-1);
 
   return (
@@ -38,6 +41,61 @@ export default async function ReviewPage() {
           Dark = last 7 days, light = last 30.
         </p>
         <BucketChart data={r.buckets} />
+      </Panel>
+
+      <Panel title="Milestone progress">
+        {milestones.length ? (
+          <ul className="flex flex-col gap-2">
+            {milestones.map((m) => {
+              const pct = m.fraction === null ? null : Math.round(m.fraction * 100);
+              const overdue = m.daysLeft < 0 && !m.completedAt;
+              return (
+                <li key={m.id} className="flex flex-col gap-1">
+                  <div className="flex items-baseline justify-between gap-2 text-xs">
+                    <span className={m.completedAt ? "text-ink-muted line-through" : "text-ink"}>
+                      {m.name}
+                      {m.bucketName ? (
+                        <span className="ml-1.5 text-ink-muted">{m.bucketName}</span>
+                      ) : null}
+                    </span>
+                    <span className={overdue ? "tabular text-signal" : "tabular text-ink-muted"}>
+                      {pct === null ? "no tasks linked" : `${m.doneTasks}/${m.totalTasks} · ${pct}%`}
+                      {" · "}
+                      {m.completedAt
+                        ? "reached"
+                        : m.daysLeft === 0
+                          ? "due today"
+                          : m.daysLeft > 0
+                            ? `${m.daysLeft}d left`
+                            : `${Math.abs(m.daysLeft)}d overdue`}
+                    </span>
+                  </div>
+                  <div
+                    className="h-2 w-full border border-rule bg-paper"
+                    style={{ borderRadius: "var(--radius)" }}
+                  >
+                    <div
+                      className="h-full"
+                      style={{
+                        width: `${pct ?? 0}%`,
+                        background: m.completedAt
+                          ? "var(--color-settled)"
+                          : overdue
+                            ? "var(--color-signal)"
+                            : "var(--color-ink)",
+                      }}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="text-sm text-ink-muted">
+            No milestones yet. Add one in Settings — a name, a date and a bucket —
+            then link tasks to it from the inbox.
+          </p>
+        )}
       </Panel>
 
       <Panel title="Energy by time of day">

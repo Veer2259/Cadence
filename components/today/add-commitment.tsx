@@ -10,7 +10,7 @@ import { Button, Input, Labeled } from "@/components/ui/controls";
  * heading. Writes a `commitments` row for today; the planner treats it as
  * absolute on the next compose / rebalance. Transition-driven (no effect).
  */
-export function AddCommitment() {
+export function AddCommitment({ date }: { date?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -19,6 +19,7 @@ export function AddCommitment() {
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    if (date) fd.set("date", date);
     start(async () => {
       const res = await addCommitment(fd);
       if (res.ok) {

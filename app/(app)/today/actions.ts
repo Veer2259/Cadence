@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
-import { istToday } from "@/lib/time";
+import { istToday, compareToToday } from "@/lib/time";
 import { modelFor } from "@/lib/ai/models";
 import { composePlan } from "@/lib/ai/modes/compose";
 import {
@@ -24,6 +24,17 @@ import { insertCommitment } from "@/lib/commitments";
 import { commitmentInput, flattenIssues } from "@/lib/schemas";
 import { recordEnergy } from "@/lib/energy-db";
 import { MustDoOverflowError } from "@/lib/must-do";
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Resolve a caller-supplied date, refusing anything in the past. */
+function writableDate(input: unknown): { ok: true; date: string } | { ok: false; error: string } {
+  const date = typeof input === "string" && DATE_RE.test(input) ? input : istToday();
+  if (compareToToday(date) === -1) {
+    return { ok: false, error: "That day is in the past — it is a record, not a plan." };
+  }
+  return { ok: true, date };
+}
 
 export type PlanActionResult =
   | { ok: true; planId: string; violations: string[]; retried: boolean }
@@ -50,13 +61,15 @@ function friendlyError(e: unknown): string {
   return "Something went wrong building the plan.";
 }
 
-export async function planMyDay(): Promise<PlanActionResult> {
+export async function planMyDay(dateInput?: string): Promise<PlanActionResult> {
   await requireAuth();
-  const date = istToday();
+  const d = writableDate(dateInput);
+  if (!d.ok) return { ok: false, error: d.error };
+  const date = d.date;
 
   const live = await getLivePlan(date);
   if (live?.plan.status === "committed") {
-    return { ok: false, error: "Today already has a committed plan." };
+    return { ok: false, error: "That day already has a committed plan." };
   }
 
   try {
@@ -68,6 +81,7 @@ export async function planMyDay(): Promise<PlanActionResult> {
       plan: out.plan,
     });
     revalidatePath("/today");
+    revalidatePath("/week");
     return { ok: true, planId, violations: out.violations, retried: out.retried };
   } catch (e) {
     return { ok: false, error: friendlyError(e) };
@@ -99,6 +113,7 @@ export async function discardTodayPlan(planId: string): Promise<PlanActionResult
 /* ------------------------------------------------------------------ */
 
 const adjustSchema = z.object({
+  date: z.string().regex(DATE_RE).optional(),
   blockId: z.string().uuid(),
   startMin: z.number().int().min(0).max(1440),
   endMin: z.number().int().min(1).max(1440),
@@ -113,8 +128,10 @@ export async function adjustBlock(input: unknown): Promise<AdjustResult> {
   const parsed = adjustSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Bad block edit." };
 
+  const d = writableDate(parsed.data.date);
+  if (!d.ok) return { ok: false, error: d.error };
   const res = await applyBlockAdjustment({
-    dateStr: istToday(),
+    dateStr: d.date,
     blockId: parsed.data.blockId,
     startMin: parsed.data.startMin,
     endMin: parsed.data.endMin,
@@ -183,6 +200,7 @@ export async function logEnergy(level: unknown): Promise<EnergyResult> {
 /* ------------------------------------------------------------------ */
 
 const blockLogSchema = z.object({
+  date: z.string().regex(DATE_RE).optional(),
   blockId: z.string().uuid(),
   status: z.enum(["planned", "done", "partial", "skipped"]),
 });
@@ -196,8 +214,10 @@ export async function setBlockStatus(input: unknown): Promise<BlockLogActionResu
   const parsed = blockLogSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Bad block log." };
 
+  const d = writableDate(parsed.data.date);
+  if (!d.ok) return { ok: false, error: d.error };
   const res = await logBlockStatus({
-    dateStr: istToday(),
+    dateStr: d.date,
     blockId: parsed.data.blockId,
     status: parsed.data.status,
   });

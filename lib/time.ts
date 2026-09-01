@@ -242,3 +242,16 @@ export function validateWeeklyWindows(weekly: WeeklyWindows): string[] {
   }
   return problems;
 }
+
+/** Shift an IST calendar date string by whole days. */
+export function addIstDays(dateStr: string, days: number): string {
+  const base = istWallToUtc(dateStr, "12:00"); // midday: immune to any DST edge
+  return istDateString(new Date(base.getTime() + days * 86_400_000));
+}
+
+/** -1 past, 0 today, +1 future — comparing IST calendar dates, not instants. */
+export function compareToToday(dateStr: string, now: Date = new Date()): -1 | 0 | 1 {
+  const today = istToday(now);
+  if (dateStr === today) return 0;
+  return dateStr < today ? -1 : 1;
+}

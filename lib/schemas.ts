@@ -67,6 +67,7 @@ export const taskInput = z.object({
     .transform((v) => v ?? null),
   dueDate: ymd.nullish().transform((v) => v || null),
   priority: zPriority.default("normal"),
+  milestoneId: optionalUuid,
 });
 export type TaskInput = z.infer<typeof taskInput>;
 
@@ -126,6 +127,23 @@ export const commitmentInput = z
     path: ["end"],
   });
 export type CommitmentInput = z.infer<typeof commitmentInput>;
+
+/* ------------------------------------------------------------------ */
+/*  Milestones — a name, a date, a bucket. Deliberately nothing more.  */
+/* ------------------------------------------------------------------ */
+
+export const milestoneInput = z.object({
+  name: z.string().trim().min(1, "Give it a name").max(120),
+  targetDate: ymd,
+  bucketId: optionalUuid,
+});
+export type MilestoneInput = z.infer<typeof milestoneInput>;
+
+/** Weekly target hours for a bucket. Empty clears it. */
+export const bucketTargetInput = z.object({
+  bucketId: z.string().uuid(),
+  targetHours: z.coerce.number().min(0).max(168).nullish().transform((v) => (v == null ? null : Math.round(v * 60))),
+});
 
 /* ------------------------------------------------------------------ */
 /*  Day profile                                                       */

@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef } from "react";
 import {
   createBucket,
+  saveBucketTarget,
   updateBucket,
   setBucketActive,
   type FormResult,
@@ -17,6 +18,7 @@ type Bucket = {
   name: string;
   color: string;
   priorityHint: string | null;
+  weeklyTargetMin: number | null;
   active: boolean;
 };
 
@@ -75,6 +77,11 @@ function BucketRow({ bucket }: { bucket: Bucket }) {
           {bucket.priorityHint ? (
             <span className="ml-2 text-xs text-ink-muted">{bucket.priorityHint}</span>
           ) : null}
+          {bucket.weeklyTargetMin ? (
+            <span className="tabular ml-2 text-xs text-ink-muted">
+              · {(bucket.weeklyTargetMin / 60).toFixed(1)}h/wk target
+            </span>
+          ) : null}
           {!bucket.active ? (
             <span className="ml-2 text-xs text-ink-muted">· retired</span>
           ) : null}
@@ -124,6 +131,34 @@ function BucketRow({ bucket }: { bucket: Bucket }) {
           <div className="w-full">
             <Errors errors={errors} />
           </div>
+        </form>
+      ) : null}
+
+      {editing ? (
+        <form
+          action={saveBucketTarget}
+          className="mt-2 flex flex-wrap items-end gap-2 border-t border-rule pt-2"
+        >
+          <input type="hidden" name="bucketId" value={bucket.id} />
+          <Labeled
+            label="Weekly target (hours)"
+            hint="Intent only — nothing schedules against it. Blank to clear."
+          >
+            <Input
+              name="targetHours"
+              type="number"
+              min={0}
+              max={168}
+              step={0.5}
+              defaultValue={
+                bucket.weeklyTargetMin != null ? bucket.weeklyTargetMin / 60 : ""
+              }
+              className="w-28"
+            />
+          </Labeled>
+          <Button type="submit" variant="quiet">
+            Save target
+          </Button>
         </form>
       ) : null}
     </li>

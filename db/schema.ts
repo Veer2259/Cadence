@@ -94,6 +94,12 @@ export const buckets = pgTable("buckets", {
   color: text("color").notNull(), // hex
   active: boolean("active").notNull().default(true),
   priorityHint: text("priority_hint"), // free text passed to the planner
+  /**
+   * Intended hours per week for this bucket, in minutes. Null = no target.
+   * The Week screen compares this against logged time. It is a statement of
+   * intent only — nothing schedules against it and nothing enforces it.
+   */
+  weeklyTargetMin: integer("weekly_target_min"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -118,6 +124,10 @@ export const tasks = pgTable(
     /** self-reference for subtasks, one level only (enforced in app code) */
     parentId: uuid("parent_id").references((): AnyPgColumn => tasks.id, {
       onDelete: "cascade",
+    }),
+    /** optional link to a milestone; milestone progress is derived from these */
+    milestoneId: uuid("milestone_id").references(() => milestones.id, {
+      onDelete: "set null",
     }),
     /**
      * A hard constraint, not a priority. A must-do task CANNOT be sent to
@@ -168,6 +178,30 @@ export const habits = pgTable("habits", {
   bucketId: uuid("bucket_id").references(() => buckets.id, { onDelete: "set null" }),
   active: boolean("active").notNull().default(true),
 });
+
+/* -------------------------------------------------------------------------- */
+/*  milestones — a name, a target date, a bucket. Deliberately nothing else.   */
+/*                                                                             */
+/*  Not a project: no dependencies, no sub-milestones, no percent-complete     */
+/*  field. Progress is DERIVED from the tasks that link to it, so it cannot    */
+/*  drift out of sync with the work.                                          */
+/* -------------------------------------------------------------------------- */
+
+export const milestones = pgTable(
+  "milestones",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    /** IST calendar date it is aimed at */
+    targetDate: date("target_date").notNull(),
+    bucketId: uuid("bucket_id").references(() => buckets.id, { onDelete: "set null" }),
+    /** set by hand when the milestone is reached or abandoned */
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("milestones_target_date_idx").on(t.targetDate)],
+);
 
 /* -------------------------------------------------------------------------- */
 /*  plans                                                                      */
@@ -231,6 +265,13 @@ export const blocks = pgTable(
     rawEstimateMin: integer("raw_estimate_min").notNull(),
     status: blockStatusEnum("status").notNull().default("planned"),
     actualMin: integer("actual_min"), // filled at debrief
+    /**
+     * When the status was actually set — by the ribbon's log-as-you-go control
+     * or at debrief. This is the ONLY evidence of when work really happened:
+     * start_at/end_at are the plan's intent and never move. Approximate actual
+     * start = logged_at - actual_min.
+     */
+    loggedAt: timestamp("logged_at", { withTimezone: true }),
   },
   (t) => [index("blocks_plan_id_idx").on(t.planId)],
 );
@@ -265,6 +306,22 @@ export const timeLog = pgTable("time_log", {
   bucketId: uuid("bucket_id").references(() => buckets.id, { onDelete: "set null" }),
   taskId: uuid("task_id").references(() => tasks.id, { onDelete: "set null" }),
   category: categoryEnum("category").notNull(),
+  /**
+   * What the plan intended, kept alongside what happened. start_at is the ACTUAL
+   * start where it is known; this is the planned one, so "when do I do deep work
+   * versus when I meant to" is answerable from this table alone.
+   */
+  plannedStartAt: timestamp("planned_start_at", { withTimezone: true }),
+  /**
+   * The uncalibrated estimate this work was given. Without it the ledger records
+   * duration but not accuracy, and estimate-vs-actual cannot be recomputed or
+   * sliced later — the calibration table only keeps a rolling average.
+   */
+  rawEstimateMin: integer("raw_estimate_min"),
+  /** prevailing energy nearest this work, denormalised so slicing is a plain query */
+  energyLevel: energyLevelEnum("energy_level"),
+  /** task / habit / fixed — so habit time can be separated from work time */
+  kind: blockKindEnum("kind"),
   /** false for unplanned work logged after the fact */
   planned: boolean("planned").notNull().default(true),
   note: text("note"),
@@ -390,5 +447,7 @@ export type DayProfile = typeof dayProfile.$inferSelect;
 export type NewDayProfile = typeof dayProfile.$inferInsert;
 export type EnergyLogRow = typeof energyLog.$inferSelect;
 export type NewEnergyLogRow = typeof energyLog.$inferInsert;
+export type Milestone = typeof milestones.$inferSelect;
+export type NewMilestone = typeof milestones.$inferInsert;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type NewChatMessage = typeof chatMessages.$inferInsert;

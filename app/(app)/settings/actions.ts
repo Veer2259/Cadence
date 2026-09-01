@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { buckets, dayProfile, habits } from "@/db/schema";
+import { buckets, dayProfile, habits, milestones } from "@/db/schema";
 import { requireAuth } from "@/lib/auth";
 import { validateWeeklyWindows, WEEKDAY_KEYS, type WeeklyWindows } from "@/lib/time";
 import { getOrCreateDayProfile } from "@/lib/day-profile";
@@ -14,8 +14,11 @@ import {
   bucketInput,
   habitInput,
   dayProfileInput,
+  milestoneInput,
+  bucketTargetInput,
   flattenIssues,
 } from "@/lib/schemas";
+import { setBucketTarget } from "@/lib/bucket-targets";
 
 export type FormResult = { ok: boolean; errors: string[] };
 const OK: FormResult = { ok: true, errors: [] };
@@ -231,4 +234,69 @@ export async function applySuggestedSharpHours(): Promise<FormResult> {
   revalidatePath("/today");
   revalidatePath("/review");
   return OK;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Milestones + weekly bucket targets (the minimal planning layer)   */
+/* ------------------------------------------------------------------ */
+
+export async function createMilestone(
+  _prev: FormResult,
+  formData: FormData,
+): Promise<FormResult> {
+  await requireAuth();
+  const parsed = milestoneInput.safeParse(toObject(formData));
+  if (!parsed.success) return fail(flattenIssues(parsed.error));
+  await db.insert(milestones).values(parsed.data);
+  revalidatePath("/settings");
+  revalidatePath("/review");
+  revalidatePath("/inbox");
+  return OK;
+}
+
+export async function updateMilestone(formData: FormData): Promise<FormResult> {
+  await requireAuth();
+  const id = z.string().uuid().safeParse(formData.get("id"));
+  if (!id.success) return fail(["Unknown milestone."]);
+  const parsed = milestoneInput.partial().safeParse(toObject(formData));
+  if (!parsed.success) return fail(flattenIssues(parsed.error));
+
+  // "done" is a single flag, not a percent — progress itself is derived
+  const completed = formData.get("completed");
+  const patch: Record<string, unknown> = { ...parsed.data };
+  if (completed !== null) patch.completedAt = completed === "true" ? new Date() : null;
+  if (formData.get("archived") !== null) {
+    patch.archived = formData.get("archived") === "true";
+  }
+
+  await db.update(milestones).set(patch).where(eq(milestones.id, id.data));
+  revalidatePath("/settings");
+  revalidatePath("/review");
+  return OK;
+}
+
+export async function deleteMilestone(formData: FormData): Promise<void> {
+  await requireAuth();
+  const id = z.string().uuid().parse(formData.get("id"));
+  await db.delete(milestones).where(eq(milestones.id, id));
+  revalidatePath("/settings");
+  revalidatePath("/review");
+}
+
+/**
+ * Set or clear a bucket's weekly target (hours in, minutes stored).
+ * Void so it can be a plain <form action>; the input is HTML-constrained, and a
+ * value that still fails validation throws rather than being swallowed.
+ */
+export async function saveBucketTarget(formData: FormData): Promise<void> {
+  await requireAuth();
+  const rawHours = formData.get("targetHours");
+  const parsed = bucketTargetInput.safeParse({
+    bucketId: formData.get("bucketId"),
+    targetHours: rawHours === "" || rawHours === null ? null : rawHours,
+  });
+  if (!parsed.success) throw new Error(flattenIssues(parsed.error).join("; "));
+  await setBucketTarget(parsed.data.bucketId, parsed.data.targetHours);
+  revalidatePath("/settings");
+  revalidatePath("/week");
 }

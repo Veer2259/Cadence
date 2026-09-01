@@ -7,9 +7,11 @@ import { DayProfileForm } from "@/components/settings/day-profile-form";
 import { BucketsPanel } from "@/components/settings/buckets-panel";
 import { HabitsPanel } from "@/components/settings/habits-panel";
 import { SharpHoursSuggestion } from "@/components/settings/sharp-hours-suggestion";
+import { MilestonesPanel } from "@/components/settings/milestones-panel";
+import { listMilestoneProgress } from "@/lib/milestones";
 import { loadEnergySamples } from "@/lib/energy-db";
 import { suggestSharpWindows } from "@/lib/energy";
-import { WEEKDAY_KEYS } from "@/lib/time";
+import { WEEKDAY_KEYS, istToday } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +51,8 @@ export default async function SettingsPage() {
     .select()
     .from(bucketsTable)
     .orderBy(desc(bucketsTable.active), asc(bucketsTable.name));
+
+  const milestoneRows = await listMilestoneProgress(istToday(), true);
 
   const allHabits = await db
     .select()
@@ -93,6 +97,7 @@ export default async function SettingsPage() {
             name: b.name,
             color: b.color,
             priorityHint: b.priorityHint,
+            weeklyTargetMin: b.weeklyTargetMin,
             active: b.active,
           }))}
         />
@@ -108,6 +113,25 @@ export default async function SettingsPage() {
             preferredWindow: h.preferredWindow,
             bucketId: h.bucketId,
             active: h.active,
+          }))}
+          buckets={bucketOpts}
+        />
+      </Section>
+
+      <Section
+        title="Milestones"
+        description="A name, a target date, a bucket. Progress is counted from the tasks you link to one — there is nothing else to maintain."
+      >
+        <MilestonesPanel
+          milestones={milestoneRows.map((m) => ({
+            id: m.id,
+            name: m.name,
+            targetDate: m.targetDate,
+            bucketId: m.bucketId,
+            completedAt: m.completedAt ? m.completedAt.toISOString() : null,
+            archived: m.archived,
+            totalTasks: m.totalTasks,
+            doneTasks: m.doneTasks,
           }))}
           buckets={bucketOpts}
         />
