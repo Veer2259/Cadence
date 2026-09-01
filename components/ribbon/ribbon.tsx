@@ -23,6 +23,14 @@ export type ProtectedRange = Range & { label: string };
 
 const PX_PER_MIN = 1.25;
 const GUTTER_PX = 46;
+/** Sharp hours are marked with a hairline bracket in the gutter, not a
+ *  full-width fill — the fill dominated the ribbon and competed with the blocks.
+ *  The bracket sits in the gutter's right padding: hour labels are right-aligned
+ *  and stop 8px short of the ribbon body, so it collides with nothing. */
+const SHARP_INSET_PX = 6;
+const SHARP_BRACKET_PX = 5;
+const SHARP_MARK_COLOR =
+  "color-mix(in srgb, var(--color-sharp) 35%, var(--color-ink-muted))";
 /** Drag / resize snap, in minutes. */
 const SNAP_MIN = 5;
 /** Shortest a block can be dragged to. The planner's own minimum is higher, but
@@ -252,17 +260,40 @@ export function Ribbon({
           />
         ))}
 
-        {/* sharp-hours band — full width so it reads even when blocks are packed */}
-        {sharpRanges.map((r, i) => (
-          <div
-            key={`sharp-${i}`}
-            className="pointer-events-none absolute right-0 left-0"
-            style={{
-              ...clampBand(r.startMin, r.endMin),
-              background: "var(--color-sharp)",
-            }}
-          />
-        ))}
+        {/* sharp hours — a hairline bracket in the gutter. Enough to see where
+            they start and end; not enough to dominate the ribbon. */}
+        {sharpRanges.map((r, i) => {
+          const band = clampBand(r.startMin, r.endMin);
+          if (band.height <= 0) return null;
+          return (
+            <div
+              key={`sharp-${i}`}
+              aria-hidden
+              className="pointer-events-none absolute"
+              style={{
+                left: GUTTER_PX - SHARP_INSET_PX,
+                width: SHARP_BRACKET_PX,
+                color: SHARP_MARK_COLOR,
+                ...band,
+              }}
+            >
+              {/* spine, hugging the ribbon's left edge */}
+              <span
+                className="absolute inset-y-0 right-0 w-px"
+                style={{ background: "currentColor" }}
+              />
+              {/* serifs marking where the range starts and ends */}
+              <span
+                className="absolute top-0 right-0 h-px w-full"
+                style={{ background: "currentColor" }}
+              />
+              <span
+                className="absolute bottom-0 right-0 h-px w-full"
+                style={{ background: "currentColor" }}
+              />
+            </div>
+          );
+        })}
 
         {/* protected blocks — reserved, non-plannable; visible and labelled */}
         {protectedRanges.map((r, i) => (
