@@ -77,8 +77,12 @@ export function checkDayGeometry(
   }
 
   // --- inside a working window ---
+  // Habits are exempt: they are personal, not work (a 06:30 gym session against
+  // a 09:00 work window is the SPEC's own example). They must still clear
+  // commitments and protected blocks, and must not overlap anything.
   const windows = clockToIntervals(ctx.workWindows);
   for (const b of clean) {
+    if (b.kind === "habit") continue;
     const inside = windows.some((w) => b.startMin >= w.start && b.endMin <= w.end);
     if (!inside) {
       v.push(

@@ -27,6 +27,7 @@ export type ComposeTask = {
 export type ComposeCommitment = { title: string; start: string; end: string };
 export type ComposeProtected = { label: string; start: string; end: string };
 export type ComposeHabit = {
+  id: string;
   name: string;
   durationMin: number;
   preferredWindow: string | null;

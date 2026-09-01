@@ -145,7 +145,15 @@ export async function createHabit(
   formData: FormData,
 ): Promise<FormResult> {
   await requireAuth();
-  const parsed = habitInput.safeParse({ ...toObject(formData), active: true });
+  const cadence = parseJson(formData, "cadence");
+  if (typeof cadence === "symbol") {
+    return fail(["The cadence could not be read — please reload and try again."]);
+  }
+  const parsed = habitInput.safeParse({
+    ...toObject(formData),
+    cadence,
+    active: true,
+  });
   if (!parsed.success) return fail(flattenIssues(parsed.error));
 
   await db.insert(habits).values(parsed.data);
@@ -158,7 +166,14 @@ export async function updateHabit(formData: FormData): Promise<FormResult> {
   const id = z.string().uuid().safeParse(formData.get("id"));
   if (!id.success) return fail(["Unknown habit."]);
 
-  const parsed = habitInput.omit({ active: true }).partial().safeParse(toObject(formData));
+  const cadence = parseJson(formData, "cadence");
+  if (typeof cadence === "symbol") {
+    return fail(["The cadence could not be read — please reload and try again."]);
+  }
+  const parsed = habitInput
+    .omit({ active: true })
+    .partial()
+    .safeParse({ ...toObject(formData), cadence });
   if (!parsed.success) return fail(flattenIssues(parsed.error));
 
   await db

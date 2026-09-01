@@ -2,6 +2,7 @@ import { asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { buckets as bucketsTable, habits as habitsTable } from "@/db/schema";
 import { getOrCreateDayProfile } from "@/lib/day-profile";
+import { narrowCadence } from "@/lib/habits";
 import { DayProfileForm } from "@/components/settings/day-profile-form";
 import { BucketsPanel } from "@/components/settings/buckets-panel";
 import { HabitsPanel } from "@/components/settings/habits-panel";
@@ -90,7 +91,7 @@ export default async function SettingsPage() {
           habits={allHabits.map((h) => ({
             id: h.id,
             name: h.name,
-            cadence: h.cadence,
+            cadence: narrowCadence(h.cadence),
             durationMin: h.durationMin,
             preferredWindow: h.preferredWindow,
             bucketId: h.bucketId,

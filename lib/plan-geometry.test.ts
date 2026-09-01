@@ -41,6 +41,22 @@ test("a block outside every working window is flagged", () => {
   assert.ok(v.some((m) => /outside the working windows/.test(m)), v.join("; "));
 });
 
+test("a habit is allowed outside the working windows, but not over a commitment", () => {
+  // 06:30 gym against a 09:00 work window — the SPEC's own example shape.
+  assert.deepEqual(
+    checkDayGeometry([b("gym", 6 * 60 + 30, 7 * 60 + 30, "habit")], CTX),
+    [],
+  );
+  const overCommit = checkDayGeometry(
+    [b("gym", 11 * 60, 11 * 60 + 30, "habit")],
+    CTX,
+  );
+  assert.ok(
+    overCommit.some((m) => /scheduled over a fixed commitment/.test(m)),
+    overCommit.join("; "),
+  );
+});
+
 test("a block spanning the 13:00-14:00 gap is outside the windows", () => {
   const v = checkDayGeometry([b("through lunch", 12 * 60 + 30, 14 * 60 + 30)], CTX);
   assert.ok(v.some((m) => /outside the working windows/.test(m)), v.join("; "));

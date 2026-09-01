@@ -151,7 +151,9 @@ export const commitments = pgTable("commitments", {
 export const habits = pgTable("habits", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
-  cadence: text("cadence").notNull(), // e.g. "3x/week", "daily", "mon,wed,fri"
+  /** HabitCadence: { kind:"daily" } | { kind:"days", days } | { kind:"per_week", count }.
+   *  Read through narrowCadence() in lib/habits.ts. */
+  cadence: jsonb("cadence").notNull(),
   durationMin: integer("duration_min").notNull(),
   preferredWindow: text("preferred_window"), // e.g. "06:00-08:00" or "evening"
   bucketId: uuid("bucket_id").references(() => buckets.id, { onDelete: "set null" }),

@@ -9,13 +9,15 @@ import {
 } from "@/app/(app)/settings/actions";
 import { Button, Input, Labeled, Select } from "@/components/ui/controls";
 import { useEditorForm } from "@/components/ui/use-editor-form";
+import { CadencePicker } from "@/components/settings/cadence-picker";
+import { formatCadence, type HabitCadence } from "@/lib/habits";
 
 const INITIAL: FormResult = { ok: true, errors: [] };
 
 type Habit = {
   id: string;
   name: string;
-  cadence: string;
+  cadence: HabitCadence;
   durationMin: number;
   preferredWindow: string | null;
   bucketId: string | null;
@@ -46,9 +48,7 @@ function AddHabit({ buckets }: { buckets: BucketOpt[] }) {
       <Labeled label="New habit">
         <Input name="name" placeholder="e.g. gym" required />
       </Labeled>
-      <Labeled label="Cadence" hint="daily · 3x/week · mon,wed,fri">
-        <Input name="cadence" placeholder="3x/week" required className="w-32" />
-      </Labeled>
+      <CadencePicker />
       <Labeled label="Duration (min)">
         <Input name="durationMin" type="number" min={5} max={480} step={5} required className="w-24" />
       </Labeled>
@@ -81,7 +81,7 @@ function HabitRow({ habit, buckets }: { habit: Habit; buckets: BucketOpt[] }) {
 
   const bucketName = buckets.find((b) => b.id === habit.bucketId)?.name;
   const meta = [
-    habit.cadence,
+    formatCadence(habit.cadence),
     `${habit.durationMin}m`,
     habit.preferredWindow,
     bucketName,
@@ -124,9 +124,7 @@ function HabitRow({ habit, buckets }: { habit: Habit; buckets: BucketOpt[] }) {
           <Labeled label="Name">
             <Input name="name" defaultValue={habit.name} required />
           </Labeled>
-          <Labeled label="Cadence">
-            <Input name="cadence" defaultValue={habit.cadence} required className="w-32" />
-          </Labeled>
+          <CadencePicker initial={habit.cadence} />
           <Labeled label="Duration (min)">
             <Input
               name="durationMin"

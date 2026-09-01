@@ -84,9 +84,24 @@ export const taskStatusChange = z.object({
 /*  Habits                                                            */
 /* ------------------------------------------------------------------ */
 
+const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+
+/** Structured habit cadence — mirrors HabitCadence in lib/habits.ts. */
+export const habitCadenceSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("daily") }),
+  z.object({
+    kind: z.literal("days"),
+    days: z.array(z.enum(WEEKDAYS)).min(1, "Pick at least one day"),
+  }),
+  z.object({
+    kind: z.literal("per_week"),
+    count: z.coerce.number().int().min(1).max(7),
+  }),
+]);
+
 export const habitInput = z.object({
   name: z.string().trim().min(1).max(80),
-  cadence: z.string().trim().min(1, "e.g. daily, 3x/week, mon,wed,fri").max(40),
+  cadence: habitCadenceSchema,
   durationMin: z.coerce.number().int().min(5).max(480),
   preferredWindow: z.string().trim().max(40).nullish().transform((v) => v || null),
   bucketId: optionalUuid,

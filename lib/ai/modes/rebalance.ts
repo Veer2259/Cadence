@@ -156,6 +156,7 @@ export async function rebalancePlan(
     account: opts.account,
     energy: opts.energy,
     habitsDue: habitRows.map((h) => ({
+      id: h.id,
       name: h.name,
       durationMin: h.durationMin,
       preferredWindow: h.preferredWindow,

@@ -72,14 +72,14 @@ async function insertSeedData() {
     .values([
       {
         name: "gym",
-        cadence: "3x/week",
+        cadence: { kind: "per_week", count: 3 },
         durationMin: 60,
         preferredWindow: "06:30-08:00",
         bucketId: b.home,
       },
       {
         name: "reading",
-        cadence: "daily",
+        cadence: { kind: "daily" },
         durationMin: 30,
         preferredWindow: "evening",
         bucketId: b.learning,

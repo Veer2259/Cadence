@@ -60,5 +60,20 @@ export function validatePlan(plan: PlanResult, input: ComposeInput): string[] {
     }
   });
 
+  // --- habits due today must be placed ---
+  // `overflow` rows reference a task id (FK to tasks), so a habit cannot be
+  // deferred there. A due habit is placed or the plan is wrong.
+  for (const h of input.habitsDue) {
+    const name = h.name.trim().toLowerCase();
+    const placed = plan.blocks.some(
+      (b) => b.kind === "habit" && b.title.trim().toLowerCase().includes(name),
+    );
+    if (!placed) {
+      v.push(
+        `habit "${h.name}" (${h.durationMin} min${h.preferredWindow ? `, prefers ${h.preferredWindow}` : ""}) is due today but has no habit block — add one, outside the working windows if that is where it belongs`,
+      );
+    }
+  }
+
   return v;
 }

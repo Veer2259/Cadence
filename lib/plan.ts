@@ -88,6 +88,9 @@ export async function saveDraftPlan(args: {
   const { dateStr, model, input, plan, parentPlanId, preservedBlocks = [] } = args;
   const taskIds = new Set(input.tasks.map((t) => t.id));
   const rawByTask = new Map(input.tasks.map((t) => [t.id, t.rawEstimateMin]));
+  const habitIdByName = new Map(
+    input.habitsDue.map((h) => [h.name.trim().toLowerCase(), h.id]),
+  );
 
   return db.transaction(async (tx) => {
     const existingDraft = await tx.query.plans.findFirst({
@@ -139,10 +142,14 @@ export async function saveDraftPlan(args: {
 
     const newRows = plan.blocks.map((b) => {
       const isTask = b.kind === "task" && !!b.taskId && taskIds.has(b.taskId);
+      const habitId =
+        b.kind === "habit"
+          ? (habitIdByName.get(b.title.trim().toLowerCase()) ?? null)
+          : null;
       return {
         planId: planRow.id,
         taskId: isTask ? b.taskId! : null,
-        habitId: null,
+        habitId,
         startAt: istDayInstant(dateStr, b.start),
         endAt: istDayInstant(dateStr, b.end),
         kind: b.kind,

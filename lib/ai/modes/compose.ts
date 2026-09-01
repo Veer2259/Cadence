@@ -18,7 +18,9 @@ import {
   istTimeString,
   istWeekdayKeyForDate,
   windowsForWeekday,
+  WEEKDAY_KEYS,
 } from "@/lib/time";
+import { narrowCadence, isHabitDueOn } from "@/lib/habits";
 import { runStructured, CallBudget } from "@/lib/ai/provider";
 import { BUDGET } from "@/lib/ai/budget";
 import { planSchema, type PlanResult } from "@/lib/ai/schemas";
@@ -33,19 +35,13 @@ import type {
 /** Fallback when a task has no estimate at all. */
 const DEFAULT_ESTIMATE_MIN = 30;
 
-function habitDueOn(cadence: string, weekday: string): boolean {
-  const c = cadence.trim().toLowerCase();
-  if (c === "daily" || c === "every day") return true;
-  if (/^\s*\d+\s*x\s*\/\s*week/.test(c)) return true; // Nx/week — let the planner weigh it
-  return c
-    .split(/[,\s]+/)
-    .map((s) => s.slice(0, 3))
-    .includes(weekday);
-}
-
 export async function buildComposeInput(dateStr: string): Promise<ComposeInput> {
   const profile = await getOrCreateDayProfile();
   const weekday = istWeekdayKeyForDate(dateStr);
+  // The weekdays a habit can be placed on = those with at least one work window.
+  const availableWeekdays = WEEKDAY_KEYS.filter(
+    (k) => windowsForWeekday(profile.workWindows, k).length > 0,
+  );
 
   // --- calibration (category scope only feeds estimates) ---
   const calRows = await db
@@ -114,8 +110,9 @@ export async function buildComposeInput(dateStr: string): Promise<ComposeInput> 
     .from(habits)
     .where(eq(habits.active, true));
   const habitPayload = activeHabits
-    .filter((h) => habitDueOn(h.cadence, weekday))
+    .filter((h) => isHabitDueOn(narrowCadence(h.cadence), weekday, availableWeekdays))
     .map((h) => ({
+      id: h.id,
       name: h.name,
       durationMin: h.durationMin,
       preferredWindow: h.preferredWindow,
@@ -155,6 +152,15 @@ const USER_INSTRUCTION = [
   "the estimate materially. Schedule with `calibratedEstimateMin`, and the reason",
   "line for that block MUST name the shift in plain language, e.g. \"1h planned,",
   "1h25 scheduled — you run ~40% over on deep work\" (use its category and deltaPct).",
+  "",
+  "Every entry in `habitsDue` MUST appear in the plan as a block with kind",
+  "\"habit\", `title` set to the habit's exact `name`, and length `durationMin`.",
+  "Habits are personal, not work: unlike tasks, a habit block MAY sit outside the",
+  "working windows — put it in its `preferredWindow` when one is given (a clock",
+  "range, or a word like \"evening\"), even if that is before or after the working",
+  "day. A habit must still not overlap another block, a fixed commitment, or a",
+  "protected block. Never put a habit in `overflow` and never drop one: overflow",
+  "is for tasks only.",
 ].join("\n");
 
 export async function composePlan(dateStr: string): Promise<ComposeOutcome> {
