@@ -92,17 +92,29 @@ export function Ribbon({
   // sub-pixel gap or overlap) while staying strictly proportional.
   const y = (min: number) => Math.round((min - windowStartMin) * PX_PER_MIN);
   const bandHeight = (a: number, b: number) => y(b) - y(a);
+  // Background bands must never escape the ribbon box: a negative `top` would
+  // paint the band over the page controls above the ribbon (and, being opaque,
+  // swallow their clicks). Callers already size the window to include every
+  // range, but clamp here too so a stray range can't reach outside.
+  const clampTop = (min: number) => Math.max(0, Math.min(height, y(min)));
+  const clampBand = (a: number, b: number) => {
+    const top = clampTop(a);
+    return { top, height: Math.max(0, clampTop(b) - top) };
+  };
 
   const firstHour = Math.ceil(windowStartMin / 60);
   const lastHour = Math.floor(windowEndMin / 60);
   const hours: number[] = [];
   for (let h = firstHour; h <= lastHour; h++) hours.push(h);
 
+  // No `overflow-hidden` on the root — it would clip the blocks' hover/focus
+  // reason popover. clampBand/clampTop already keep every background layer
+  // strictly inside [0, height], and each is pointer-events-none besides.
   return (
     <div className="relative" style={{ height, paddingLeft: GUTTER_PX }}>
       {/* body */}
       <div
-        className="absolute inset-y-0 right-0 border border-rule bg-paper"
+        className="pointer-events-none absolute inset-y-0 right-0 border border-rule bg-paper"
         style={{ left: GUTTER_PX }}
       />
 
@@ -110,8 +122,8 @@ export function Ribbon({
       {workRanges.map((r, i) => (
         <div
           key={`work-${i}`}
-          className="absolute right-0 bg-surface"
-          style={{ left: GUTTER_PX, top: y(r.startMin), height: bandHeight(r.startMin, r.endMin) }}
+          className="pointer-events-none absolute right-0 bg-surface"
+          style={{ left: GUTTER_PX, ...clampBand(r.startMin, r.endMin) }}
         />
       ))}
 
@@ -119,10 +131,9 @@ export function Ribbon({
       {sharpRanges.map((r, i) => (
         <div
           key={`sharp-${i}`}
-          className="absolute right-0 left-0"
+          className="pointer-events-none absolute right-0 left-0"
           style={{
-            top: y(r.startMin),
-            height: bandHeight(r.startMin, r.endMin),
+            ...clampBand(r.startMin, r.endMin),
             background: "var(--color-sharp)",
           }}
         />
@@ -132,11 +143,10 @@ export function Ribbon({
       {protectedRanges.map((r, i) => (
           <div
             key={`prot-${i}`}
-            className="absolute right-0 z-[5] border-y border-rule/70"
+            className="pointer-events-none absolute right-0 z-[5] border-y border-rule/70"
             style={{
               left: GUTTER_PX,
-              top: y(r.startMin),
-              height: bandHeight(r.startMin, r.endMin),
+              ...clampBand(r.startMin, r.endMin),
               background: "color-mix(in srgb, var(--color-rule) 32%, var(--color-paper))",
             }}
           >
@@ -148,7 +158,7 @@ export function Ribbon({
 
       {/* hour rules + gutter labels */}
       {hours.map((h) => (
-        <div key={`h-${h}`} className="absolute right-0 left-0 flex items-start" style={{ top: y(h * 60) }}>
+        <div key={`h-${h}`} className="pointer-events-none absolute right-0 left-0 flex items-start" style={{ top: clampTop(h * 60) }}>
           <span
             className="tabular -translate-y-1/2 pr-2 text-[11px] text-ink-muted"
             style={{ width: GUTTER_PX, textAlign: "right" }}

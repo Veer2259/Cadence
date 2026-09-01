@@ -12,11 +12,10 @@ export default async function AppLayout({
   const history = await loadChatHistory();
 
   return (
-    // pt-12 clears the fixed header (h-12 in AppNav).
-    <div className="flex min-h-full flex-col pt-12">
+    <div className="flex min-h-full flex-col">
       <AppNav />
-      {/* isolate: page-level z-indexes (the ribbon's) stay in their own stacking
-          context, well below the fixed header's z-50 */}
+      {/* isolate: page-level z-indexes (the ribbon's) stay contained in their
+          own stacking context, below the header's z-40 */}
       <main className="isolate mx-auto w-full max-w-3xl flex-1 px-4 py-6">
         {children}
       </main>

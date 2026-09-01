@@ -136,12 +136,18 @@ export default async function TodayPage() {
     };
   });
 
+  // Every layer the ribbon paints must be inside [windowStartMin, windowEndMin],
+  // or its `top` goes negative and the band renders ABOVE the ribbon, covering
+  // the page controls (Commit / Re-plan / Discard) and eating their clicks.
+  // Sharp hours in particular often start before the first work window or block.
   const starts = [
     ...workRanges.map((r) => r.startMin),
+    ...sharpRanges.map((r) => r.startMin),
     ...blocks.map((b) => b.startMin),
   ];
   const ends = [
     ...workRanges.map((r) => r.endMin),
+    ...sharpRanges.map((r) => r.endMin),
     ...blocks.map((b) => b.endMin),
   ];
   const windowStartMin = starts.length ? Math.min(...starts) : 6 * 60;
