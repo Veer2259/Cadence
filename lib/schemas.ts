@@ -95,6 +95,24 @@ export const habitInput = z.object({
 export type HabitInput = z.infer<typeof habitInput>;
 
 /* ------------------------------------------------------------------ */
+/*  Commitments — one-off fixed things (meetings, a match, an appt)    */
+/* ------------------------------------------------------------------ */
+
+export const commitmentInput = z
+  .object({
+    title: z.string().trim().min(1, "Give it a name").max(120),
+    date: ymd,
+    start: hm,
+    end: hm,
+  })
+  // zero-padded 24h HH:mm sorts lexically the same as numerically
+  .refine((v) => v.end > v.start, {
+    message: "End must be after start",
+    path: ["end"],
+  });
+export type CommitmentInput = z.infer<typeof commitmentInput>;
+
+/* ------------------------------------------------------------------ */
 /*  Day profile                                                       */
 /* ------------------------------------------------------------------ */
 

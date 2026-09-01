@@ -13,6 +13,7 @@ import { db } from "@/db";
 import { chatMessages, type ChatMessage } from "@/db/schema";
 import { runChatTurn, CallBudget, ModelBudgetError } from "@/lib/ai/provider";
 import { CHAT_SYSTEM_PROMPT } from "@/lib/ai/prompts/chat";
+import { formatIst, istToday } from "@/lib/time";
 import { CHAT_TOOLS, executeChatTool } from "@/lib/ai/chat-tools";
 import type { ChatTurn } from "@/lib/ai/adapters/types";
 
@@ -22,7 +23,10 @@ const MAX_STEPS = 4;
 /** whole-message ceiling on outbound calls across the tool loop */
 const CHAT_CALL_BUDGET = 6;
 
-export type PendingAction = { kind: "compose" | "rebalance"; params: Record<string, unknown> };
+export type PendingAction = {
+  kind: "compose" | "rebalance" | "drop_block";
+  params: Record<string, unknown>;
+};
 
 export type ChatReply = {
   assistant: ChatMessage;
@@ -55,6 +59,14 @@ export async function runChat(userText: string): Promise<ChatReply> {
 
   const turns: ChatTurn[] = [...historyToTurns(history), { role: "user", text }];
 
+  // The model has no clock. Anchor every relative date ("tonight", "tomorrow",
+  // "Friday") to the real IST calendar.
+  const system =
+    `${CHAT_SYSTEM_PROMPT}\n\n` +
+    `Right now it is ${formatIst(new Date(), "EEEE d MMMM yyyy, HH:mm")} ` +
+    `(Asia/Kolkata). "today" is ${istToday()}. Resolve every relative date ` +
+    `against this before calling a tool; never guess a date.`;
+
   let replyText = "";
   let pending: PendingAction | null = null;
   const toolTrace: { name: string; args: unknown; result: unknown }[] = [];
@@ -65,7 +77,7 @@ export async function runChat(userText: string): Promise<ChatReply> {
     try {
       out = await runChatTurn({
         role: "compose",
-        system: CHAT_SYSTEM_PROMPT,
+        system,
         turns,
         tools: CHAT_TOOLS,
         budget,

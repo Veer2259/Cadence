@@ -11,8 +11,16 @@ import { and, eq, gte, inArray, isNull, sql, ilike } from "drizzle-orm";
 import { db } from "@/db";
 import { tasks, buckets, timeLog } from "@/db/schema";
 import { insertTask, resolveBucketId } from "@/lib/tasks";
-import { istEndOfDayToUtc } from "@/lib/time";
+import {
+  istEndOfDayToUtc,
+  istToday,
+  istMinutesOfDay,
+  hmToMinutes,
+  minutesToHm,
+} from "@/lib/time";
 import { computePressure } from "@/lib/pressure";
+import { getLivePlan, applyBlockAdjustment } from "@/lib/plan";
+import { insertCommitment } from "@/lib/commitments";
 import type { ToolDeclaration } from "@/lib/ai/adapters/types";
 
 const CATEGORY = ["deep", "shallow", "calls", "admin", "errand", "personal"] as const;
@@ -21,7 +29,12 @@ const STATUS = ["inbox", "active", "done", "dropped"] as const;
 
 export type ToolResult =
   | { result: Record<string, unknown> }
-  | { confirm: { kind: "compose" | "rebalance"; params: Record<string, unknown> } };
+  | {
+      confirm: {
+        kind: "compose" | "rebalance" | "drop_block";
+        params: Record<string, unknown>;
+      };
+    };
 
 /* ------------------------------------------------------------------ */
 /*  Declarations                                                       */
@@ -78,6 +91,39 @@ export const CHAT_TOOLS: ToolDeclaration[] = [
         bucketName: { type: "string" },
         dueWithinDays: { type: "integer" },
       },
+    },
+  },
+  {
+    name: "create_commitment",
+    description:
+      "Add a fixed commitment (a thing that cannot move: a meeting, a match, an appointment). " +
+      "Executes immediately. Use for one-off timed things that are not a habit and not a to-do.",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        start: { type: "string", description: "IST clock time, HH:mm" },
+        end: { type: "string", description: "IST clock time, HH:mm" },
+        date: { ...dateField, description: "IST date, YYYY-MM-DD (default: today)" },
+      },
+      required: ["title", "start", "end"],
+    },
+  },
+  {
+    name: "adjust_block",
+    description:
+      "Move, resize, or drop one block on today's live plan (draft OR committed). " +
+      "Found by blockTitleContains. move/resize apply immediately; drop returns a " +
+      "confirmation card. Other blocks are left where they are; any new conflict is reported.",
+    parameters: {
+      type: "object",
+      properties: {
+        blockTitleContains: { type: "string" },
+        action: { type: "string", enum: ["move", "resize", "drop"] },
+        start: { type: "string", description: "new start, HH:mm (move / resize)" },
+        end: { type: "string", description: "new end, HH:mm (resize)" },
+      },
+      required: ["blockTitleContains", "action"],
     },
   },
   {
@@ -221,6 +267,101 @@ export async function executeChatTool(
         .orderBy(sql`${tasks.dueAt} asc nulls last`)
         .limit(60);
       return { result: { count: rows.length, tasks: rows } };
+    }
+
+    case "create_commitment": {
+      const title = str(args.title);
+      const start = str(args.start);
+      const end = str(args.end);
+      if (!title || !start || !end) {
+        return { result: { error: "title, start and end (HH:mm) are required" } };
+      }
+      const date = str(args.date) ?? istToday();
+      try {
+        const row = await insertCommitment({
+          title,
+          dateStr: date,
+          startHm: start,
+          endHm: end,
+        });
+        return {
+          result: {
+            created: { title: row.title, date, start, end },
+            note: "The next plan / rebalance will treat this time as blocked.",
+          },
+        };
+      } catch (e) {
+        return { result: { error: e instanceof Error ? e.message : "could not save" } };
+      }
+    }
+
+    case "adjust_block": {
+      const q = str(args.blockTitleContains);
+      const action = oneOf(args.action, ["move", "resize", "drop"] as const);
+      if (!q || !action) {
+        return { result: { error: "blockTitleContains and action are required" } };
+      }
+      const live = await getLivePlan(istToday());
+      if (!live) return { result: { error: "there is no plan today to adjust" } };
+      const matches = live.blocks.filter((b) =>
+        b.title.toLowerCase().includes(q.toLowerCase()),
+      );
+      if (matches.length === 0) return { result: { error: "no matching block" } };
+      if (matches.length > 1) {
+        return {
+          result: {
+            error: "multiple matching blocks",
+            matches: matches.map((b) => b.title),
+          },
+        };
+      }
+      const block = matches[0];
+      const curStart = istMinutesOfDay(block.startAt);
+      const curEndRaw = istMinutesOfDay(block.endAt);
+      const curEnd = curEndRaw <= curStart ? 1440 : curEndRaw;
+
+      if (action === "drop") {
+        return {
+          confirm: {
+            kind: "drop_block",
+            params: { blockId: block.id, title: block.title },
+          },
+        };
+      }
+
+      let startMin = curStart;
+      let endMin = curEnd;
+      if (action === "move") {
+        const s = str(args.start);
+        if (!s) return { result: { error: "move needs a new start (HH:mm)" } };
+        startMin = hmToMinutes(s);
+        endMin = startMin + (curEnd - curStart); // keep duration
+      } else {
+        // resize
+        const e = str(args.end);
+        const s = str(args.start);
+        if (s) startMin = hmToMinutes(s);
+        if (!e) return { result: { error: "resize needs a new end (HH:mm)" } };
+        endMin = hmToMinutes(e);
+      }
+
+      const res = await applyBlockAdjustment({
+        dateStr: istToday(),
+        blockId: block.id,
+        startMin,
+        endMin,
+      });
+      if (!res.ok) return { result: { error: res.error } };
+      return {
+        result: {
+          updated: {
+            title: block.title,
+            start: minutesToHm(startMin),
+            end: minutesToHm(Math.min(1440, endMin)),
+          },
+          violations: res.violations,
+        },
+      };
     }
 
     case "trigger_compose":

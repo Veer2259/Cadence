@@ -122,10 +122,22 @@ export function ChatRail({ initial }: { initial: ChatMsg[] }) {
                     style={{ borderRadius: "var(--radius)" }}
                   >
                     <p className="text-xs text-ink">
-                      Run <span className="font-medium">{m.pending.kind}</span>?
-                      {m.pending.kind === "rebalance" && m.pending.params.energy
-                        ? ` (energy: ${String(m.pending.params.energy)})`
-                        : ""}
+                      {m.pending.kind === "drop_block" ? (
+                        <>
+                          Drop{" "}
+                          <span className="font-medium">
+                            &ldquo;{String(m.pending.params.title ?? "this block")}&rdquo;
+                          </span>{" "}
+                          from the plan?
+                        </>
+                      ) : (
+                        <>
+                          Run <span className="font-medium">{m.pending.kind}</span>?
+                          {m.pending.kind === "rebalance" && m.pending.params.energy
+                            ? ` (energy: ${String(m.pending.params.energy)})`
+                            : ""}
+                        </>
+                      )}
                     </p>
                     <div className="mt-2 flex gap-2">
                       <button

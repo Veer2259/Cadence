@@ -17,7 +17,10 @@ import {
   saveDraftPlan,
   commitPlan,
   discardDraft,
+  applyBlockAdjustment,
 } from "@/lib/plan";
+import { insertCommitment } from "@/lib/commitments";
+import { commitmentInput, flattenIssues } from "@/lib/schemas";
 
 export type PlanActionResult =
   | { ok: true; planId: string; violations: string[]; retried: boolean }
@@ -84,4 +87,66 @@ export async function discardTodayPlan(planId: string): Promise<PlanActionResult
   await discardDraft(id.data);
   revalidatePath("/today");
   return { ok: true, planId: id.data, violations: [], retried: false };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Drag-to-adjust — move / resize a block on the live plan           */
+/* ------------------------------------------------------------------ */
+
+const adjustSchema = z.object({
+  blockId: z.string().uuid(),
+  startMin: z.number().int().min(0).max(1440),
+  endMin: z.number().int().min(1).max(1440),
+});
+
+export type AdjustResult =
+  | { ok: true; violations: string[] }
+  | { ok: false; error: string };
+
+export async function adjustBlock(input: unknown): Promise<AdjustResult> {
+  await requireAuth();
+  const parsed = adjustSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Bad block edit." };
+
+  const res = await applyBlockAdjustment({
+    dateStr: istToday(),
+    blockId: parsed.data.blockId,
+    startMin: parsed.data.startMin,
+    endMin: parsed.data.endMin,
+  });
+  if (!res.ok) return res;
+  revalidatePath("/today");
+  return { ok: true, violations: res.violations };
+}
+
+/* ------------------------------------------------------------------ */
+/*  One-off fixed commitments                                         */
+/* ------------------------------------------------------------------ */
+
+export type CommitmentFormResult = { ok: boolean; errors: string[] };
+
+export async function addCommitment(
+  formData: FormData,
+): Promise<CommitmentFormResult> {
+  await requireAuth();
+  const parsed = commitmentInput.safeParse({
+    title: formData.get("title"),
+    date: formData.get("date") || istToday(),
+    start: formData.get("start"),
+    end: formData.get("end"),
+  });
+  if (!parsed.success) return { ok: false, errors: flattenIssues(parsed.error) };
+
+  try {
+    await insertCommitment({
+      title: parsed.data.title,
+      dateStr: parsed.data.date,
+      startHm: parsed.data.start,
+      endHm: parsed.data.end,
+    });
+  } catch (e) {
+    return { ok: false, errors: [e instanceof Error ? e.message : "Could not save."] };
+  }
+  revalidatePath("/today");
+  return { ok: true, errors: [] };
 }

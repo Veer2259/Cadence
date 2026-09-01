@@ -9,10 +9,31 @@
 import "server-only";
 import { and, eq, inArray, asc, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { plans, blocks, overflow, type Plan, type Block, type OverflowRow } from "@/db/schema";
-import { istDayInstant } from "@/lib/time";
+import {
+  plans,
+  blocks,
+  overflow,
+  commitments,
+  type Plan,
+  type Block,
+  type OverflowRow,
+} from "@/db/schema";
+import {
+  istDayInstant,
+  istMinutesOfDay,
+  istTimeString,
+  istWeekdayKeyForDate,
+  minutesToHm,
+  windowsForWeekday,
+} from "@/lib/time";
+import { getOrCreateDayProfile } from "@/lib/day-profile";
+import {
+  checkDayGeometry,
+  type GeometryContext,
+  type GeoBlock,
+} from "@/lib/plan-geometry";
 import type { ComposeInput } from "@/lib/ai/compose-types";
-import type { PlanResult } from "@/lib/ai/schemas";
+import type { PlanBlock, PlanResult } from "@/lib/ai/schemas";
 
 export type LivePlan = {
   plan: Plan;
@@ -173,4 +194,148 @@ export async function discardDraft(planId: string): Promise<void> {
   await db
     .delete(plans)
     .where(and(eq(plans.id, planId), eq(plans.status, "draft")));
+}
+
+/* ------------------------------------------------------------------ */
+/*  Manual block edits — drag-to-adjust + the assistant's adjust_block */
+/* ------------------------------------------------------------------ */
+
+/** Snap a minute value to the nearest 5, clamped to a single day. */
+function snap5(min: number): number {
+  return Math.min(1440, Math.max(0, Math.round(min / 5) * 5));
+}
+
+/** A block row rendered back into the model-output shape for output_snapshot. */
+function blockRowToPlanBlock(b: Block): PlanBlock {
+  return {
+    taskId: b.taskId ?? null,
+    title: b.title,
+    start: istTimeString(b.startAt),
+    end: istTimeString(b.endAt),
+    kind: b.kind,
+    category: b.category,
+    estimateMin: b.estimateMin,
+    reason: b.reason,
+  };
+}
+
+/** The positional context for `checkDayGeometry` on a given IST date. */
+export async function buildGeometryContext(
+  dateStr: string,
+): Promise<GeometryContext> {
+  const profile = await getOrCreateDayProfile();
+  const weekday = istWeekdayKeyForDate(dateStr);
+
+  const dayStart = istDayInstant(dateStr, "00:00");
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  const dayCommitments = (await db.select().from(commitments)).filter(
+    (c) => c.startAt < dayEnd && c.endAt > dayStart,
+  );
+
+  return {
+    workWindows: windowsForWeekday(profile.workWindows, weekday),
+    commitments: dayCommitments.map((c) => ({
+      start: istTimeString(c.startAt),
+      end: istTimeString(c.endAt),
+    })),
+    protectedBlocks: profile.protectedBlocks,
+    dailyCapMin: profile.dailyCapMin,
+  };
+}
+
+function blocksToGeo(rows: Block[]): GeoBlock[] {
+  return rows.map((b) => ({
+    startMin: istMinutesOfDay(b.startAt),
+    endMin: (() => {
+      const e = istMinutesOfDay(b.endAt);
+      return e <= istMinutesOfDay(b.startAt) ? 1440 : e;
+    })(),
+    kind: b.kind,
+    title: b.title,
+  }));
+}
+
+export type BlockEditResult =
+  | { ok: true; violations: string[] }
+  | { ok: false; error: string };
+
+/**
+ * Move / resize one block on whatever plan is live for `dateStr` (a draft takes
+ * precedence over its committed parent, matching what the ribbon shows). The
+ * edit is applied in place — no status change, no supersede, no model call —
+ * so it works on a committed plan too. Nothing else moves; conflicts introduced
+ * by the edit are returned, not fixed.
+ */
+export async function applyBlockAdjustment(args: {
+  dateStr: string;
+  blockId: string;
+  startMin: number;
+  endMin: number;
+}): Promise<BlockEditResult> {
+  const { dateStr, blockId } = args;
+  const live = await getLivePlan(dateStr);
+  if (!live) return { ok: false, error: "There is no plan to adjust today." };
+  if (!live.blocks.some((b) => b.id === blockId)) {
+    return { ok: false, error: "That block is not on today's plan." };
+  }
+
+  const startMin = snap5(args.startMin);
+  let endMin = snap5(args.endMin);
+  if (endMin <= startMin) endMin = Math.min(1440, startMin + 5);
+
+  await db
+    .update(blocks)
+    .set({
+      startAt: istDayInstant(dateStr, minutesToHm(startMin)),
+      endAt: istDayInstant(dateStr, minutesToHm(endMin)),
+    })
+    .where(eq(blocks.id, blockId));
+
+  return finishBlockEdit(dateStr, live.plan.id);
+}
+
+/** Remove one block from the live plan (the assistant's confirmed `drop`). */
+export async function dropPlanBlock(args: {
+  dateStr: string;
+  blockId: string;
+}): Promise<BlockEditResult> {
+  const { dateStr, blockId } = args;
+  const live = await getLivePlan(dateStr);
+  if (!live) return { ok: false, error: "There is no plan to adjust today." };
+  if (!live.blocks.some((b) => b.id === blockId)) {
+    return { ok: false, error: "That block is not on today's plan." };
+  }
+
+  await db.delete(blocks).where(eq(blocks.id, blockId));
+  return finishBlockEdit(dateStr, live.plan.id);
+}
+
+/** Re-read the plan's blocks, re-run the geometry checks, keep the snapshot honest. */
+async function finishBlockEdit(
+  dateStr: string,
+  planId: string,
+): Promise<BlockEditResult> {
+  const rows = await db
+    .select()
+    .from(blocks)
+    .where(eq(blocks.planId, planId))
+    .orderBy(asc(blocks.startAt));
+
+  const violations = checkDayGeometry(
+    blocksToGeo(rows),
+    await buildGeometryContext(dateStr),
+  );
+
+  // Keep output_snapshot.blocks consistent with the rows so a later
+  // rebalance / audit view does not show stale times.
+  const planRow = await db.query.plans.findFirst({ where: eq(plans.id, planId) });
+  const snap = (planRow?.outputSnapshot ?? null) as PlanResult | null;
+  if (snap) {
+    await db
+      .update(plans)
+      .set({ outputSnapshot: { ...snap, blocks: rows.map(blockRowToPlanBlock) } })
+      .where(eq(plans.id, planId));
+  }
+
+  return { ok: true, violations };
 }

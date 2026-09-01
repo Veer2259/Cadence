@@ -10,7 +10,8 @@ import {
   hmToMinutes,
 } from "@/lib/time";
 import { getOrCreateDayProfile } from "@/lib/day-profile";
-import { getLivePlan } from "@/lib/plan";
+import { getLivePlan, buildGeometryContext } from "@/lib/plan";
+import { checkDayGeometry } from "@/lib/plan-geometry";
 import type { PlanResult } from "@/lib/ai/schemas";
 import {
   Ribbon,
@@ -20,6 +21,7 @@ import {
 } from "@/components/ribbon/ribbon";
 import { OverflowList, type OverflowView } from "@/components/ribbon/overflow-list";
 import { PlanActions } from "@/components/today/plan-actions";
+import { AddCommitment } from "@/components/today/add-commitment";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +87,9 @@ export default async function TodayPage() {
               : "Draft plan — review, then commit."
             : "No plan yet."}
         </p>
+        <div className="mt-2">
+          <AddCommitment />
+        </div>
       </div>
       <PlanActions
         status={
@@ -159,6 +164,21 @@ export default async function TodayPage() {
     windowEndMin,
   );
 
+  // Positional checks over the plan as it stands now — so a manual drag that
+  // broke something still shows the warning after a reload, not just on drop.
+  const editable = realToday && !live.plan.debriefedAt;
+  const geometryWarnings = editable
+    ? checkDayGeometry(
+        blocks.map((b) => ({
+          startMin: b.startMin,
+          endMin: b.endMin,
+          kind: b.kind,
+          title: b.title,
+        })),
+        await buildGeometryContext(date),
+      )
+    : [];
+
   // --- overflow titles ---
   let overflowView: OverflowView[] = [];
   if (live.overflow.length) {
@@ -199,6 +219,8 @@ export default async function TodayPage() {
         protectedRanges={protectedRanges}
         blocks={blocks}
         isToday={realToday}
+        editable={editable}
+        initialWarnings={geometryWarnings}
       />
 
       <OverflowList items={overflowView} />

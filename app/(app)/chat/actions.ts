@@ -10,7 +10,7 @@ import { DailyQuotaError, dailyQuotaResetHint } from "@/lib/ai/provider";
 import { runChat, appendAssistantNote, type PendingAction } from "@/lib/ai/modes/chat";
 import { composePlan } from "@/lib/ai/modes/compose";
 import { rebalancePlan } from "@/lib/ai/modes/rebalance";
-import { saveDraftPlan, getCommittedPlan } from "@/lib/plan";
+import { saveDraftPlan, getCommittedPlan, dropPlanBlock } from "@/lib/plan";
 
 export type ChatMsg = {
   role: "user" | "assistant";
@@ -57,7 +57,7 @@ export async function sendChatMessage(content: string): Promise<SendResult> {
 }
 
 const confirmSchema = z.object({
-  kind: z.enum(["compose", "rebalance"]),
+  kind: z.enum(["compose", "rebalance", "drop_block"]),
   params: z.record(z.string(), z.unknown()).default({}),
 });
 
@@ -72,6 +72,23 @@ export async function confirmChatAction(input: unknown): Promise<ConfirmResult> 
 
   const date = istToday();
   try {
+    if (parsed.data.kind === "drop_block") {
+      const blockId = z.string().uuid().safeParse(parsed.data.params.blockId);
+      if (!blockId.success) return { ok: false, error: "Unknown block." };
+      const res = await dropPlanBlock({ dateStr: date, blockId: blockId.data });
+      if (!res.ok) {
+        await appendAssistantNote(`Couldn't drop that: ${res.error}`);
+        return { ok: false, error: res.error };
+      }
+      revalidatePath("/today");
+      const title = String(parsed.data.params.title ?? "the block");
+      const note = res.violations.length
+        ? `Dropped "${title}". Heads up: ${res.violations.join("; ")}.`
+        : `Dropped "${title}" from the plan.`;
+      await appendAssistantNote(note);
+      return { ok: true, note, changed: true };
+    }
+
     if (parsed.data.kind === "compose") {
       const out = await composePlan(date);
       await saveDraftPlan({
