@@ -30,6 +30,7 @@ const ctxBase = {
   fullDayContext: {
     date: "2026-09-01",
     now: "2026-09-01T07:30:00Z",
+  planFromMin: 0,
     timezone: "Asia/Kolkata",
     workWindows: [["09:00", "13:00"], ["14:00", "20:00"]],
     sharpHours: [["09:00", "12:30"]],
@@ -41,8 +42,8 @@ const ctxBase = {
     commitments: [],
     habitsDue: [],
     tasks: [
-      { id: "t-done", title: "morning deep work", bucket: null, category: "deep", rawEstimateMin: 120, calibratedEstimateMin: 120, dueAt: null, priority: "normal" as const, deferCount: 0 },
-      { id: "t-next", title: "afternoon calls", bucket: null, category: "calls", rawEstimateMin: 40, calibratedEstimateMin: 40, dueAt: null, priority: "normal" as const, deferCount: 0 },
+      { id: "t-done", title: "morning deep work", bucket: null, category: "deep", rawEstimateMin: 120, calibratedEstimateMin: 120, dueAt: null, priority: "normal" as const, deferCount: 0, mustDoToday: false },
+      { id: "t-next", title: "afternoon calls", bucket: null, category: "calls", rawEstimateMin: 40, calibratedEstimateMin: 40, dueAt: null, priority: "normal" as const, deferCount: 0, mustDoToday: false },
     ],
     calibration: [],
   } satisfies ComposeInput,

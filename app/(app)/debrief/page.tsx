@@ -48,6 +48,9 @@ export default async function DebriefPage({
       category: b.category,
       plannedMin: b.estimateMin,
       startLabel: hm(istMinutesOfDay(b.startAt)),
+      // "planned" means untouched; anything else was logged live from the ribbon
+      loggedStatus: b.status === "planned" ? null : b.status,
+      loggedActualMin: b.actualMin,
     }));
 
   return <DebriefForm planId={target.plan.id} dateLabel={dateLabel} blocks={blocks} />;

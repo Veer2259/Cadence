@@ -58,6 +58,13 @@ export const CHAT_TOOLS: ToolDeclaration[] = [
         dueDate: dateField,
         priority: { type: "string", enum: PRIORITY },
         status: { type: "string", enum: ["inbox", "active"] },
+        mustDoToday: {
+          type: "boolean",
+          description:
+            "HARD constraint: the planner may not defer this to overflow. Only set " +
+            "it when the person clearly means today is the deadline, not merely that " +
+            "it is important — priority is for importance.",
+        },
       },
       required: ["title"],
     },
@@ -79,6 +86,7 @@ export const CHAT_TOOLS: ToolDeclaration[] = [
         dueDate: dateField,
         priority: { type: "string", enum: PRIORITY },
         status: { type: "string", enum: STATUS },
+        mustDoToday: { type: "boolean", description: "see create_task" },
       },
     },
   },
@@ -225,6 +233,7 @@ export async function executeChatTool(
         dueAt: str(args.dueDate) ? istEndOfDayToUtc(str(args.dueDate)!) : null,
         priority: oneOf(args.priority, PRIORITY) ?? "normal",
         status: oneOf(args.status, ["inbox", "active"] as const) ?? "active",
+        mustDoToday: args.mustDoToday === true,
         source: "manual",
       });
       return { result: { created: row } };
@@ -252,6 +261,7 @@ export async function executeChatTool(
       if (str(args.bucketName) !== undefined)
         patch.bucketId = await resolveBucketId(str(args.bucketName)!);
       if (str(args.dueDate)) patch.dueAt = istEndOfDayToUtc(str(args.dueDate)!);
+      if (typeof args.mustDoToday === "boolean") patch.mustDoToday = args.mustDoToday;
       const status = oneOf(args.status, STATUS);
       if (status) {
         patch.status = status;
@@ -287,6 +297,7 @@ export async function executeChatTool(
           estimateMin: tasks.estimateMin,
           priority: tasks.priority,
           deferCount: tasks.deferCount,
+          mustDoToday: tasks.mustDoToday,
           dueAt: tasks.dueAt,
         })
         .from(tasks)

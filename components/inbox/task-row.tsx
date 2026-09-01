@@ -3,6 +3,7 @@
 import {
   patchTask,
   setTaskStatus,
+  toggleMustDoToday,
   deleteTask,
 } from "@/app/(app)/inbox/actions";
 import { CATEGORIES, PRIORITIES } from "@/lib/schemas";
@@ -16,6 +17,7 @@ export type TaskView = {
   category: string;
   priority: string;
   status: "inbox" | "active" | "done" | "dropped";
+  mustDoToday: boolean;
   estimateMin: number | null;
   deferCount: number;
   bucketId: string | null;
@@ -75,7 +77,18 @@ export function TaskRow({
     <li className="border-b border-rule py-2 last:border-b-0">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-sm text-ink">{task.title}</p>
+          <p className="text-sm text-ink">
+            {task.mustDoToday ? (
+              <span
+                className="mr-1.5 border border-signal px-1 py-0.5 align-middle font-mono text-[10px] tracking-wide text-signal uppercase"
+                style={{ borderRadius: "var(--radius)" }}
+                title="Must do today — compose cannot defer this"
+              >
+                must
+              </span>
+            ) : null}
+            {task.title}
+          </p>
           <p className="tabular mt-0.5 text-xs text-ink-muted">
             {task.bucketName ? `${task.bucketName} · ` : ""}
             {meta.join(" · ")}
@@ -83,6 +96,28 @@ export function TaskRow({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          {task.status === "active" || task.status === "inbox" ? (
+            <form action={toggleMustDoToday}>
+              <input type="hidden" name="id" value={task.id} />
+              <input
+                type="hidden"
+                name="mustDoToday"
+                value={task.mustDoToday ? "false" : "true"}
+              />
+              <Button
+                type="submit"
+                variant={task.mustDoToday ? "danger" : "quiet"}
+                className="px-2 py-1 text-xs"
+                title={
+                  task.mustDoToday
+                    ? "Remove the must-do-today flag"
+                    : "Mark must-do-today — a hard constraint the planner cannot defer"
+                }
+              >
+                {task.mustDoToday ? "Must ✓" : "Must"}
+              </Button>
+            </form>
+          ) : null}
           {task.status === "inbox" ? (
             <StatusButton id={task.id} status="active" variant="solid">
               Confirm

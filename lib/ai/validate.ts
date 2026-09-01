@@ -10,7 +10,7 @@
  * Returns a list of human-readable violations ([] = clean).
  */
 
-import { hmToMinutes } from "@/lib/time";
+import { hmToMinutes, minutesToHm } from "@/lib/time";
 import { checkDayGeometry, type GeoBlock } from "@/lib/plan-geometry";
 import type { PlanResult } from "./schemas";
 import type { ComposeInput } from "./compose-types";
@@ -44,6 +44,17 @@ export function validatePlan(plan: PlanResult, input: ComposeInput): string[] {
     }),
   );
 
+  // --- nothing scheduled into hours that have already passed ---
+  // The model is told this too, but models drift on arithmetic; this is the
+  // check that actually holds. Mirrors the replanFrom rule rebalance enforces.
+  for (const b of geoBlocks) {
+    if (b.startMin < input.planFromMin - 1) {
+      v.push(
+        `"${b.title}" starts at ${minutesToHm(b.startMin)}, before the earliest plannable time (${minutesToHm(input.planFromMin)})`,
+      );
+    }
+  }
+
   // --- taskId integrity ---
   plan.blocks.forEach((b, idx) => {
     if (b.kind === "task") {
@@ -72,6 +83,19 @@ export function validatePlan(plan: PlanResult, input: ComposeInput): string[] {
       v.push(
         `habit "${h.name}" (${h.durationMin} min${h.preferredWindow ? `, prefers ${h.preferredWindow}` : ""}) is due today but has no habit block — add one, outside the working windows if that is where it belongs`,
       );
+    }
+  }
+
+  // --- must-do tasks are a hard constraint ---
+  const mustDoIds = new Map(
+    input.tasks.filter((t) => t.mustDoToday).map((t) => [t.id, t.title]),
+  );
+  for (const [id, title] of mustDoIds) {
+    if (plan.overflow.some((o) => o.taskId === id)) {
+      v.push(`"${title}" is marked must-do-today and cannot be sent to overflow`);
+    }
+    if (!plan.blocks.some((b) => b.kind === "task" && b.taskId === id)) {
+      v.push(`"${title}" is marked must-do-today but has no block in the plan`);
     }
   }
 

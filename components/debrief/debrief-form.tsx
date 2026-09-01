@@ -16,6 +16,9 @@ export type DebriefBlock = {
   category: string;
   plannedMin: number;
   startLabel: string;
+  /** what was already logged from the ribbon during the day, if anything */
+  loggedStatus: "done" | "partial" | "skipped" | null;
+  loggedActualMin: number | null;
 };
 
 type Status = "done" | "partial" | "skipped";
@@ -44,11 +47,21 @@ export function DebriefForm({
   dateLabel: string;
   blocks: DebriefBlock[];
 }) {
+  // Seed from whatever was logged live; only the untouched blocks fall back to
+  // the "done, as planned" default. Nothing already answered is asked again.
   const [rows, setRows] = useState<Record<string, Row>>(() =>
     Object.fromEntries(
-      blocks.map((b) => [b.id, { status: "done" as Status, actualMin: b.plannedMin }]),
+      blocks.map((b) => [
+        b.id,
+        {
+          status: (b.loggedStatus ?? "done") as Status,
+          actualMin: b.loggedActualMin ?? b.plannedMin,
+        },
+      ]),
     ),
   );
+  const preLogged = blocks.filter((b) => b.loggedStatus !== null).length;
+  const remaining = blocks.length - preLogged;
   const [pending, start] = useTransition();
   const [result, setResult] = useState<DebriefActionResult | null>(null);
 
@@ -112,8 +125,11 @@ export function DebriefForm({
       <div>
         <h1 className="font-mono text-lg tracking-tight text-ink">Debrief — {dateLabel}</h1>
         <p className="judgment mt-1 text-sm text-ink-muted">
-          Everything is marked done at the planned time. Change only what was
-          different, then log the day.
+          {preLogged > 0
+            ? remaining > 0
+              ? `${preLogged} of ${blocks.length} already logged during the day — change only the remaining ${remaining}, then log the day.`
+              : "Everything was already logged during the day. Check it over, then log the day."
+            : "Everything is marked done at the planned time. Change only what was different, then log the day."}
         </p>
       </div>
 

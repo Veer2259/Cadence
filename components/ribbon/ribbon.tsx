@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { adjustBlock } from "@/app/(app)/today/actions";
+import { adjustBlock, setBlockStatus } from "@/app/(app)/today/actions";
 import { NowLine } from "./now-line";
 
 export type RibbonBlock = {
@@ -16,6 +16,8 @@ export type RibbonBlock = {
   reason: string;
   estimateMin: number;
   status: "planned" | "done" | "partial" | "skipped";
+  /** the task behind this block is flagged must-do-today */
+  mustDoToday?: boolean;
 };
 
 export type Range = { startMin: number; endMin: number };
@@ -84,6 +86,11 @@ function BlockHeader({
           block.kind === "break" ? "text-ink-muted" : "text-ink",
         )}
       >
+        {block.mustDoToday ? (
+          <span className="mr-1 font-mono text-[10px] tracking-wide text-signal">
+            MUST
+          </span>
+        ) : null}
         {block.title}
       </span>
       <span className="tabular shrink-0 text-[11px] text-ink-muted">
@@ -109,6 +116,58 @@ type Gesture = {
 type Draft = { startMin: number; endMin: number };
 
 const snap = (n: number) => Math.round(n / SNAP_MIN) * SNAP_MIN;
+
+const LOG_OPTIONS = [
+  { key: "done", label: "done" },
+  { key: "partial", label: "partial" },
+  { key: "skipped", label: "skipped" },
+] as const;
+
+/**
+ * Mark a block during the day. Lives in the block's hover/focus panel so it is
+ * reachable at ANY block height — a 15-minute block has no room for inline
+ * controls, but it still has a panel. Hover on a pointer, one tap to focus on
+ * touch, then one tap to log.
+ */
+function BlockLog({
+  status,
+  disabled,
+  onPick,
+}: {
+  status: RibbonBlock["status"];
+  disabled: boolean;
+  onPick: (next: RibbonBlock["status"]) => void;
+}) {
+  return (
+    <div className="mt-1.5 flex items-center gap-1 border-t border-rule pt-1.5">
+      {LOG_OPTIONS.map((o) => {
+        const active = status === o.key;
+        return (
+          <button
+            key={o.key}
+            type="button"
+            disabled={disabled}
+            aria-pressed={active}
+            // the block itself is a drag surface — do not start a gesture here
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPick(active ? "planned" : o.key);
+            }}
+            className={cn(
+              "border border-rule px-1.5 py-0.5 text-[10px] disabled:opacity-50",
+              active ? "bg-ink text-paper" : "bg-surface text-ink-muted hover:text-ink",
+            )}
+            style={{ borderRadius: "var(--radius)" }}
+            title={active ? "Tap again to clear" : `Mark ${o.label}`}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export function Ribbon({
   windowStartMin,
@@ -212,6 +271,17 @@ export function Ribbon({
     g.curS = s;
     g.curE = en;
     setDrafts((d) => ({ ...d, [g.id]: { startMin: s, endMin: en } }));
+  }
+
+  function pickStatus(blockId: string, next: RibbonBlock["status"]) {
+    startSave(async () => {
+      const res = await setBlockStatus({ blockId, status: next });
+      if (!res.ok) {
+        setWarnings([res.error]);
+        return;
+      }
+      router.refresh();
+    });
   }
 
   function onDragEnd() {
@@ -360,13 +430,16 @@ export function Ribbon({
                     ? "border-rule opacity-60"
                     : b.status === "done"
                       ? "border-settled"
-                      : "border-ink/25",
+                      : b.status === "partial"
+                        ? "border-caution"
+                        : "border-ink/25",
               )}
               style={{
                 left: GUTTER_PX + 4,
                 top: y(p.startMin),
                 height: blockHeight,
                 borderRadius: "var(--radius)",
+                borderLeft: b.mustDoToday ? "2px solid var(--color-signal)" : undefined,
                 background: isFixed
                   ? "repeating-linear-gradient(45deg, var(--color-surface) 0 6px, var(--color-paper) 6px 12px)"
                   : isBreak
@@ -406,12 +479,21 @@ export function Ribbon({
 
               {/* full untruncated reason on hover / focus — hidden while this
                   block is being dragged */}
-              {b.reason && !dragging ? (
+              {(b.reason || (editable && b.kind !== "break")) && !dragging ? (
                 <div className="absolute top-full right-1 left-0 z-40 mt-0.5 hidden border border-ink bg-surface px-2 py-1.5 group-hover:block group-focus:block group-focus-within:block">
                   <BlockHeader block={b} tight={false} atMin={p.startMin} toMin={p.endMin} />
-                  <p className="judgment mt-0.5 text-[12px] leading-snug text-ink-muted">
-                    {b.reason}
-                  </p>
+                  {b.reason ? (
+                    <p className="judgment mt-0.5 text-[12px] leading-snug text-ink-muted">
+                      {b.reason}
+                    </p>
+                  ) : null}
+                  {editable && b.kind !== "break" ? (
+                    <BlockLog
+                      status={b.status}
+                      disabled={saving}
+                      onPick={(next) => pickStatus(b.id, next)}
+                    />
+                  ) : null}
                 </div>
               ) : null}
             </div>

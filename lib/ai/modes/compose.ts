@@ -16,8 +16,11 @@ import {
   IST,
   istWallToUtc,
   istTimeString,
+  istToday,
+  istMinutesOfDay,
   istWeekdayKeyForDate,
   windowsForWeekday,
+  clipFrom,
   WEEKDAY_KEYS,
 } from "@/lib/time";
 import { narrowCadence, isHabitDueOn } from "@/lib/habits";
@@ -26,6 +29,7 @@ import { BUDGET } from "@/lib/ai/budget";
 import { planSchema, type PlanResult } from "@/lib/ai/schemas";
 import { COMPOSE_SYSTEM_PROMPT } from "@/lib/ai/prompts/compose";
 import { validatePlan } from "@/lib/ai/validate";
+import { checkMustDoFit, MustDoOverflowError, type MustDoTask } from "@/lib/must-do";
 import type {
   ComposeInput,
   ComposeTask,
@@ -35,9 +39,16 @@ import type {
 /** Fallback when a task has no estimate at all. */
 const DEFAULT_ESTIMATE_MIN = 30;
 
-export async function buildComposeInput(dateStr: string): Promise<ComposeInput> {
+export async function buildComposeInput(
+  dateStr: string,
+  now: Date = new Date(),
+): Promise<ComposeInput> {
   const profile = await getOrCreateDayProfile();
   const weekday = istWeekdayKeyForDate(dateStr);
+
+  // Composing TODAY mid-day must not schedule into hours that have already
+  // gone. Planning a future date starts from midnight as normal.
+  const planFromMin = dateStr === istToday(now) ? istMinutesOfDay(now) : 0;
   // The weekdays a habit can be placed on = those with at least one work window.
   const availableWeekdays = WEEKDAY_KEYS.filter(
     (k) => windowsForWeekday(profile.workWindows, k).length > 0,
@@ -79,6 +90,7 @@ export async function buildComposeInput(dateStr: string): Promise<ComposeInput> 
       dueAt: t.dueAt ? t.dueAt.toISOString() : null,
       priority: t.priority,
       deferCount: t.deferCount,
+      mustDoToday: t.mustDoToday,
     };
     if (applied && isMaterialShift(ratio)) {
       const cal = calByCategory.get(t.category)!;
@@ -120,10 +132,11 @@ export async function buildComposeInput(dateStr: string): Promise<ComposeInput> 
 
   return {
     date: dateStr,
-    now: new Date().toISOString(),
+    now: now.toISOString(),
     timezone: IST,
-    workWindows: windowsForWeekday(profile.workWindows, weekday),
-    sharpHours: windowsForWeekday(profile.sharpHours, weekday),
+    planFromMin,
+    workWindows: clipFrom(windowsForWeekday(profile.workWindows, weekday), planFromMin),
+    sharpHours: clipFrom(windowsForWeekday(profile.sharpHours, weekday), planFromMin),
     dailyCapMin: profile.dailyCapMin,
     minBlockMin: profile.minBlockMin,
     maxBlockMin: profile.maxBlockMin,
@@ -148,6 +161,15 @@ export type ComposeOutcome = {
 const USER_INSTRUCTION = [
   "Here is today's planning payload as JSON. Produce the time-blocked plan.",
   "",
+  "A task with `mustDoToday: true` is a HARD constraint. It must appear as a",
+  "block in `blocks`. Putting one in `overflow` is not an option — the app has",
+  "already checked they fit in the time available, so if you cannot place one you",
+  "have made an arithmetic error. Place must-do tasks first, then fill around them.",
+  "",
+  "`planFromMin` is the earliest minute-of-day you may schedule anything at (it is",
+  "the current time when planning today). Never place a block before it — those",
+  "hours are already gone. The working windows you were given are already clipped.",
+  "",
   "Any task with a `calibration` object is one where this person's history moved",
   "the estimate materially. Schedule with `calibratedEstimateMin`, and the reason",
   "line for that block MUST name the shift in plain language, e.g. \"1h planned,",
@@ -165,6 +187,26 @@ const USER_INSTRUCTION = [
 
 export async function composePlan(dateStr: string): Promise<ComposeOutcome> {
   const input = await buildComposeInput(dateStr);
+
+  // Do the must-do tasks fit in what is left of today? Answered in code, before
+  // spending a model call — so "these do not fit" is arithmetic we can show,
+  // never the planner quietly deferring one.
+  const mustDo: MustDoTask[] = input.tasks
+    .filter((t) => t.mustDoToday)
+    .map((t) => ({ id: t.id, title: t.title, minutes: t.calibratedEstimateMin }));
+  if (mustDo.length) {
+    const fit = checkMustDoFit({
+      tasks: mustDo,
+      windows: input.workWindows,
+      cuts: [
+        ...input.commitments.map((x) => [x.start, x.end] as [string, string]),
+        ...input.protectedBlocks.map((x) => [x.start, x.end] as [string, string]),
+      ],
+      dailyCapMin: input.dailyCapMin,
+    });
+    if (!fit.fits) throw new MustDoOverflowError(fit);
+  }
+
   const payloadJson = JSON.stringify(input, null, 2);
 
   // One hard ceiling across the initial call, its Zod retry, and the

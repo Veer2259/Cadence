@@ -119,6 +119,12 @@ export const tasks = pgTable(
     parentId: uuid("parent_id").references((): AnyPgColumn => tasks.id, {
       onDelete: "cascade",
     }),
+    /**
+     * A hard constraint, not a priority. A must-do task CANNOT be sent to
+     * overflow: compose refuses to build a plan that defers one. Deliberately
+     * separate from `priority`, which only ranks.
+     */
+    mustDoToday: boolean("must_do_today").notNull().default(false),
     /** incremented whenever a task is carried past its planned day */
     deferCount: integer("defer_count").notNull().default(0),
     source: taskSourceEnum("source").notNull(),

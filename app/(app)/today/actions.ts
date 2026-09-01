@@ -18,16 +18,20 @@ import {
   commitPlan,
   discardDraft,
   applyBlockAdjustment,
+  logBlockStatus,
 } from "@/lib/plan";
 import { insertCommitment } from "@/lib/commitments";
 import { commitmentInput, flattenIssues } from "@/lib/schemas";
 import { recordEnergy } from "@/lib/energy-db";
+import { MustDoOverflowError } from "@/lib/must-do";
 
 export type PlanActionResult =
   | { ok: true; planId: string; violations: string[]; retried: boolean }
   | { ok: false; error: string };
 
 function friendlyError(e: unknown): string {
+  // Not a failure of the planner — an honest arithmetic answer about the day.
+  if (e instanceof MustDoOverflowError) return e.message;
   if (e instanceof DailyQuotaError) {
     return `Gemini's free daily request limit for ${e.model} is used up — ${dailyQuotaResetHint()}. Set GEMINI_COMPOSE_MODEL=gemini-3.5-flash-lite (500/day) to keep going, or wait for the reset.`;
   }
@@ -172,4 +176,33 @@ export async function logEnergy(level: unknown): Promise<EnergyResult> {
   revalidatePath("/today");
   revalidatePath("/review");
   return { ok: true };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Log as you go — per-block status straight from the ribbon          */
+/* ------------------------------------------------------------------ */
+
+const blockLogSchema = z.object({
+  blockId: z.string().uuid(),
+  status: z.enum(["planned", "done", "partial", "skipped"]),
+});
+
+export type BlockLogActionResult =
+  | { ok: true; status: "planned" | "done" | "partial" | "skipped" }
+  | { ok: false; error: string };
+
+export async function setBlockStatus(input: unknown): Promise<BlockLogActionResult> {
+  await requireAuth();
+  const parsed = blockLogSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Bad block log." };
+
+  const res = await logBlockStatus({
+    dateStr: istToday(),
+    blockId: parsed.data.blockId,
+    status: parsed.data.status,
+  });
+  if (!res.ok) return res;
+  revalidatePath("/today");
+  revalidatePath("/debrief");
+  return { ok: true, status: res.status };
 }

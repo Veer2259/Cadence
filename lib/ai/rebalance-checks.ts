@@ -4,11 +4,11 @@
  * can be unit tested.
  */
 
-import {
-  istMinutesOfDay,
-  minutesToHm,
-  type Window,
-} from "@/lib/time";
+import { istMinutesOfDay, minutesToHm } from "@/lib/time";
+
+// clipFrom lives in lib/time.ts (compose uses it too); re-exported so this
+// module stays the one place the rebalance rules are imported from.
+export { clipFrom } from "@/lib/time";
 import { validatePlan } from "@/lib/ai/validate";
 import type { PlanBlock, PlanResult } from "@/lib/ai/schemas";
 import type { ComposeInput } from "@/lib/ai/compose-types";
@@ -45,15 +45,6 @@ export function blockToPlanBlock(b: Block): PlanBlock {
 }
 
 /** Clip weekly windows so nothing starts before `fromMin`. */
-export function clipFrom(windows: Window[], fromMin: number): Window[] {
-  const out: Window[] = [];
-  for (const [a, b] of windows) {
-    const s = Math.max(hm(a), fromMin);
-    const e = hm(b);
-    if (e - s >= 5) out.push([minutesToHm(s), minutesToHm(e)]);
-  }
-  return out;
-}
 
 /**
  * True only if every preserved block appears in `combinedBlocks` byte-for-byte

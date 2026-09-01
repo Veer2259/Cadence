@@ -1,4 +1,4 @@
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { tasks as tasksTable } from "@/db/schema";
 import {
@@ -127,6 +127,24 @@ export default async function TodayPage() {
   const calibrationNote = output?.calibrationNote ?? null;
   const debriefSummary = live.plan.debriefedAt ? live.plan.debriefSummary : null;
 
+  // Which of this plan's tasks are flagged must-do-today, so the ribbon can
+  // mark them distinctly. One query, not one per block.
+  const planTaskIds = [
+    ...new Set(live.blocks.filter((b) => b.taskId).map((b) => b.taskId as string)),
+  ];
+  const mustDoIds = new Set(
+    planTaskIds.length
+      ? (
+          await db
+            .select({ id: tasksTable.id })
+            .from(tasksTable)
+            .where(
+              and(inArray(tasksTable.id, planTaskIds), eq(tasksTable.mustDoToday, true)),
+            )
+        ).map((r) => r.id)
+      : [],
+  );
+
   // --- ribbon geometry ---
   const blocks: RibbonBlock[] = live.blocks.map((b) => {
     const startMin = istMinutesOfDay(b.startAt);
@@ -142,6 +160,7 @@ export default async function TodayPage() {
       reason: b.reason,
       estimateMin: b.estimateMin,
       status: b.status,
+      mustDoToday: b.taskId ? mustDoIds.has(b.taskId) : false,
     };
   });
 

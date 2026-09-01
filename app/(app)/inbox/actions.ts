@@ -191,3 +191,16 @@ export async function confirmCapturedTasks(input: unknown): Promise<FormResult> 
   revalidatePath("/inbox");
   return OK;
 }
+
+/**
+ * Toggle the must-do-today flag. One tap from the inbox list — this is a hard
+ * planning constraint, so it should never be buried behind an edit form.
+ */
+export async function toggleMustDoToday(formData: FormData): Promise<void> {
+  await requireAuth();
+  const id = z.string().uuid().parse(formData.get("id"));
+  const next = formData.get("mustDoToday") === "true";
+  await db.update(tasks).set({ mustDoToday: next }).where(eq(tasks.id, id));
+  revalidatePath("/inbox");
+  revalidatePath("/today");
+}

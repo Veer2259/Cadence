@@ -50,6 +50,7 @@ export default async function InboxPage({
     status: t.status as TaskView["status"],
     estimateMin: t.estimateMin,
     deferCount: t.deferCount,
+    mustDoToday: t.mustDoToday,
     bucketId: t.bucketId,
     bucketName: t.bucketId ? (bucketName.get(t.bucketId) ?? null) : null,
     dueDateValue: t.dueAt ? istDateString(t.dueAt) : "",

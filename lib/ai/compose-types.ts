@@ -13,6 +13,11 @@ export type ComposeTask = {
   dueAt: string | null; // ISO
   priority: "low" | "normal" | "high";
   deferCount: number;
+  /**
+   * Hard constraint. A task with this set CANNOT be placed in `overflow` —
+   * compose refuses the plan instead. Separate from priority, which only ranks.
+   */
+  mustDoToday: boolean;
   /** Present only when calibration was applied AND the shift is material
    *  (ratio >= 1.25 or <= 0.8). The planner must name this in the block reason. */
   calibration?: {
@@ -41,6 +46,12 @@ export type ComposeCalibration = {
 export type ComposeInput = {
   date: string; // IST YYYY-MM-DD
   now: string; // ISO
+  /**
+   * Earliest HH:mm anything may be scheduled at. "00:00" for a future date;
+   * the current IST time when composing today, so a plan built at 15:00 cannot
+   * put a block at 09:00. Enforced in lib/ai/validate.ts, not just prompted.
+   */
+  planFromMin: number;
   timezone: string;
   workWindows: [string, string][];
   sharpHours: [string, string][];

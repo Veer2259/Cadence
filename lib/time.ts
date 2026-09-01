@@ -190,6 +190,21 @@ export function subtractIntervals(base: Interval[], cut: Interval[]): Interval[]
 /*  Day-profile convenience                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Windows with everything before `fromMin` trimmed away. Used to plan only the
+ * time that is still ahead — by rebalance (from the replan point) and by
+ * compose when it runs mid-day. Pieces shorter than 5 minutes are dropped.
+ */
+export function clipFrom(windows: Window[], fromMin: number): Window[] {
+  const out: Window[] = [];
+  for (const [a, b] of windows) {
+    const s = Math.max(hmToMinutes(a), fromMin);
+    const e = hmToMinutes(b);
+    if (e - s >= 5) out.push([minutesToHm(s), minutesToHm(e)]);
+  }
+  return out;
+}
+
 /** Windows configured for a given weekday (empty array if none). */
 export function windowsForWeekday(weekly: WeeklyWindows, day: WeekdayKey): Window[] {
   return weekly[day] ?? [];

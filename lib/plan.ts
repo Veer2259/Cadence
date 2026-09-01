@@ -422,3 +422,50 @@ async function finishBlockEdit(
 
   return { ok: true, violations };
 }
+
+/* ------------------------------------------------------------------ */
+/*  Log-as-you-go — mark a block done / partial / skipped mid-day      */
+/* ------------------------------------------------------------------ */
+
+export type BlockLogResult =
+  | { ok: true; status: "planned" | "done" | "partial" | "skipped" }
+  | { ok: false; error: string };
+
+/**
+ * Mark one block during the day, rather than only at debrief.
+ *
+ * `done` records the block's scheduled duration as the actual (it may differ
+ * from the original estimate if the block was dragged), which is what debrief
+ * then pre-fills and what calibration eventually samples. `partial` leaves
+ * actual_min null on purpose — the debrief is where the real number is given.
+ * `planned` clears the log again, so a mis-tap is undoable.
+ */
+export async function logBlockStatus(args: {
+  dateStr: string;
+  blockId: string;
+  status: "planned" | "done" | "partial" | "skipped";
+}): Promise<BlockLogResult> {
+  const { dateStr, blockId, status } = args;
+  const live = await getLivePlan(dateStr);
+  if (!live) return { ok: false, error: "There is no plan today." };
+  if (live.plan.debriefedAt) {
+    return { ok: false, error: "This day is already closed out." };
+  }
+  const block = live.blocks.find((b) => b.id === blockId);
+  if (!block) return { ok: false, error: "That block is not on today's plan." };
+
+  const durationMin = Math.max(
+    0,
+    istMinutesOfDay(block.endAt) - istMinutesOfDay(block.startAt),
+  );
+
+  await db
+    .update(blocks)
+    .set({
+      status,
+      actualMin: status === "done" ? durationMin : null,
+    })
+    .where(eq(blocks.id, blockId));
+
+  return { ok: true, status };
+}

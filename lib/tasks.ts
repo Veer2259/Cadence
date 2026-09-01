@@ -28,6 +28,7 @@ export type InsertTaskInput = {
   dueAt?: Date | null;
   priority?: "low" | "normal" | "high" | null;
   status?: "inbox" | "active";
+  mustDoToday?: boolean;
   source: "dump" | "manual" | "voice" | "carryover";
 };
 
@@ -52,6 +53,7 @@ export async function insertTask(
       dueAt: input.dueAt ?? null,
       priority: input.priority ?? "normal",
       status: input.status ?? "active",
+      mustDoToday: input.mustDoToday ?? false,
       source: input.source,
     })
     .returning({ id: tasks.id, title: tasks.title });

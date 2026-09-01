@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
 import { recordEnergy } from "@/lib/energy-db";
+import { MustDoOverflowError } from "@/lib/must-do";
 import { istToday } from "@/lib/time";
 import { modelFor } from "@/lib/ai/models";
 import { StructuredOutputError } from "@/lib/ai/provider";
@@ -132,7 +133,12 @@ export async function confirmChatAction(input: unknown): Promise<ConfirmResult> 
     await appendAssistantNote(note);
     return { ok: true, note, changed: true };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "That action failed.";
+    const msg =
+      e instanceof MustDoOverflowError
+        ? e.message
+        : e instanceof Error
+          ? e.message
+          : "That action failed.";
     await appendAssistantNote(`Couldn't do that: ${msg}`);
     return { ok: false, error: msg };
   }

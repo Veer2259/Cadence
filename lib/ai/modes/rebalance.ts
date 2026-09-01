@@ -116,6 +116,7 @@ export async function rebalancePlan(
         dueAt: t.dueAt ? t.dueAt.toISOString() : null,
         priority: t.priority,
         deferCount: t.deferCount,
+        mustDoToday: t.mustDoToday,
       };
     });
 
@@ -173,6 +174,9 @@ export async function rebalancePlan(
   const fullDayContext: ComposeInput = {
     date: dateStr,
     now: now.toISOString(),
+    // The whole-day context is used to re-validate preserved morning blocks,
+    // which legitimately start before now — so it must not clip.
+    planFromMin: 0,
     timezone: IST,
     workWindows: dayWindows,
     sharpHours: daySharp,
@@ -199,6 +203,9 @@ export async function rebalancePlan(
           dueAt: null,
           priority: "normal",
           deferCount: 0,
+          // this stub only exists so the taskId check passes for an already
+          // completed block; it is never re-planned, so the flag is moot
+          mustDoToday: false,
         })),
     ],
     calibration: payload.calibration,
