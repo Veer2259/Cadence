@@ -228,7 +228,13 @@ At most one `committed` plan per date (enforced by a partial unique index). A re
 | estimate_min | integer | calibrated estimate used when scheduling |
 | raw_estimate_min | integer | pre-calibration, for the review screen |
 | status | enum | `planned` \| `done` \| `partial` \| `skipped` |
-| actual_min | integer nullable | filled at debrief |
+| actual_min | integer nullable | filled at debrief, or by log-as-you-go |
+| logged_at | timestamptz nullable | when the status was actually set |
+
+`logged_at` is the only evidence of when work really happened: `start_at` /
+`end_at` are the plan's intent and never move. Set by the ribbon's per-block
+done/partial/skipped controls during the day, or at debrief. Approximate actual
+start = `logged_at` − `actual_min`.
 
 ### `overflow`
 
@@ -252,8 +258,23 @@ At most one `committed` plan per date (enforced by a partial unique index). A re
 | bucket_id | uuid fk nullable | |
 | task_id | uuid fk nullable | |
 | category | enum | |
+| planned_start_at | timestamptz nullable | what the plan intended, kept beside what happened |
+| raw_estimate_min | integer nullable | the uncalibrated estimate this work was given |
+| energy_level | enum nullable | the energy sample nearest this work, denormalised |
+| kind | enum nullable | `task` \| `habit` \| `fixed`, so habit time is separable |
 | planned | boolean | false for unplanned work logged after the fact |
 | note | text nullable | |
+
+`start_at` is the **actual** start where it is known (derived from
+`blocks.logged_at` minus the actual duration); `planned_start_at` is what was
+intended. Before these columns existed, `start_at` was the planned time and the
+end was start + actual duration, so "when do I do deep work versus when I meant
+to" compared a number with itself.
+
+`raw_estimate_min` exists because `calibration` keeps only a rolling average —
+every individual (estimate, actual) pair was destroyed on write and could never
+be recomputed or sliced by weekday or energy. Weekday needs no column: it is
+derivable from `date`.
 
 ### `calibration`
 
@@ -310,6 +331,32 @@ block is attributed to every hour it overlaps. An hour needs
 
 Nothing was migrated from the old `sharp_hours` values: importing them would
 import exactly the bias this replaced.
+
+### `energy_log`
+Timestamped "how sharp am I right now" check-ins.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid pk | |
+| date | date | IST calendar date |
+| at | timestamptz | |
+| minute_of_day | integer | 0..1439, IST |
+| level | enum | `fried` \| `ok` \| `sharp` |
+| source | text | `checkin` (Today) or `rebalance` (answered on the replan form) |
+
+Self-reported, and deliberately **separate from `focus_scores`** — those are
+measured from how deep work actually went. One is how you felt, the other is
+what happened.
+
+### `seed_runs`
+Provenance for `db/seed.ts`, so it can tell its own rows from anything you
+entered and refuse to clobber real data.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid pk | |
+| ran_at | timestamptz | |
+| task_ids, bucket_ids, habit_ids | jsonb | ids created by that run |
 
 ### `chat_messages`
 For the assistant rail. `id, role, content, tool_calls jsonb, created_at`. Keep the last 200; prune older on write.
@@ -599,6 +646,41 @@ Mostly not a model call. The UI presents the day's blocks pre-filled with their 
 
 On submit: write `time_log` rows, update `calibration`, mark unfinished tasks for carry-over with `defer_count + 1`, then one cheap Haiku call for a two-line descriptive summary. Descriptive only — no advice, no encouragement, no moralising. "Six hours logged. Deep work ran 35 minutes over across two blocks. The E-Cell call didn't happen."
 
+### 6.5 Week
+
+Deterministic pressure table from section 5, then a model call for `weekNote` and per-deadline one-liners. Also produces the weekly review numbers: hours per bucket, accuracy trend, defer leaderboard. Strictly descriptive.
+
+### 6.6 Chat rail
+
+A persistent conversation pane on every screen, with tools:
+
+`create_task`, `update_task`, `list_tasks`, `list_habits`, `place_habit_today`,
+`create_commitment`, `adjust_block`, `trigger_compose`, `trigger_rebalance`,
+`query_time_log`, `get_pressure`.
+
+Everything the user could do by clicking, they can do by typing. Task writes,
+commitments and habit placement execute directly; `adjust_block` move/resize
+applies immediately while **drop** returns a confirmation card, as does anything
+that commits a plan. History persists in `chat_messages`; the last 30 go into
+context and the table is pruned to 200.
+
+**Routing.** When something is merely mentioned, the rail works out what kind of
+thing it is: a name matching an existing habit → `place_habit_today`; a new
+fixed thing at a clock time → `create_commitment`; something to *do* →
+`create_task`. The disambiguator is that *a commitment is a time you are
+occupied; a task is work that needs a slot found for it* — "call the accountant
+at 4" versus "I need to call the accountant". Genuinely ambiguous input gets ONE
+short question and no tool call.
+
+**It must say what it DISPLACED**, not only what it added. A task that leaves the
+plan is named, along with the fact it is now in overflow — an unnamed
+displacement is indistinguishable from losing the work.
+
+The system prompt is given the real IST date and time on every turn. The model
+has no clock, and without it "tonight" was dated wrong.
+
+---
+
 ### 6.7 Breakdown — the conversational goal-setting mode
 
 Model role: `reason` (the strongest available). Budget: 2 calls per TURN; the
@@ -634,20 +716,6 @@ than being padded away), and does not duplicate tasks already linked to a
 target. Like breakdown it **never writes** — candidates go to a review list
 with a keep/discard checkbox on each. Candidates pointing at a target id that
 was not supplied are dropped in code before the person ever sees them.
-
-### 6.5 Week
-
-Deterministic pressure table from section 5, then a model call for `weekNote` and per-deadline one-liners. Also produces the weekly review numbers: hours per bucket, accuracy trend, defer leaderboard. Strictly descriptive.
-
-### 6.6 Chat rail
-
-A persistent conversation pane on every screen, with tools:
-
-`create_task`, `update_task`, `list_tasks`, `trigger_compose`, `trigger_rebalance`, `query_time_log`, `get_pressure`.
-
-Everything the user could do by clicking, they can do by typing. Writes that create or modify tasks execute directly; anything that commits a plan or writes to the calendar returns a confirmation card the user must accept. History persists in `chat_messages`; load the last 30 into context.
-
----
 
 ## 7. Google Calendar
 
@@ -725,7 +793,20 @@ Accessibility floor: responsive to 380px, visible keyboard focus, `prefers-reduc
 
 ## 10. Screens
 
-**Today** — the ribbon, the overflow drawer, and per-block controls (done / took longer / skipped). A "Plan my day" button when no plan exists, "Rebalance" when one does and the current time is inside the window. Shows `calibrationNote` above the ribbon.
+**Today** — the ribbon, the overflow drawer, and per-block status controls
+(done / partial / skipped). A "Plan my day" button when no plan exists,
+"Rebalance" when one does and the current time is inside the window. Shows
+`calibrationNote` above the ribbon.
+
+Date navigation: `/today?date=YYYY-MM-DD` with prev / next / today links. Any
+future date can be planned, using that date's weekday work windows, its
+commitments and its habits. **Past days are read-only**, enforced server-side by
+a shared guard — not merely hidden in the UI. Rebalance and the energy check-in
+are today-only.
+
+Blocks can be dragged to move and resized by their edges. On drop the positional
+checks re-run and any new conflict is shown, but the move is always kept: see
+"No cascade" in section 6.1.
 
 **Inbox** — unconfirmed captures at the top with one-tap confirm, then the full active task list, filterable by bucket and sortable by due date. A brain-dump textarea pinned at the top. Inline edit of estimate, bucket, category, due date.
 
@@ -733,7 +814,7 @@ Accessibility floor: responsive to 380px, visible keyboard focus, `prefers-reduc
 
 **Review** — accuracy ratio over time trending toward 1.0 (the single most motivating chart in the app), hours per bucket for the last 7 and 30 days, per-category calibration ratios with sample counts, and the defer leaderboard: tasks pushed most often.
 
-**Goals** — the breakdown dialogue and the weekly kickoff, both proposing into a review list. **Settings** — day profile editor (work windows, cap, protected blocks; focus hours are learned, not declared), bucket CRUD, habit CRUD, Google Calendar connect/disconnect, capture token display.
+**Goals** — the breakdown dialogue and the weekly kickoff, both proposing into a review list. **Settings** — day profile editor (work windows, cap, protected blocks; focus hours are learned, not declared), bucket CRUD, habit CRUD, goals (bucket outcomes and this week's targets). Google Calendar connect and the capture token belong to Phase 6 and are not built.
 
 **Chat rail** — collapsible right panel on desktop, bottom sheet on mobile. Present on every screen.
 
@@ -787,9 +868,40 @@ Rebalance mode with completed-block preservation, the persistent assistant with 
 The pressure algorithm with earliest-due-first allocation, the week screen, the review charts.
 *Done when:* the pressure view does not double-count free hours across competing deadlines.
 
-**Phase 6 — Calendar, PWA, capture endpoint.**
+**Phase 6 — Calendar, PWA, capture endpoint. PARTIALLY DONE.**
 Google Calendar two-way sync, `.ics` export, PWA manifest and icons, `/api/capture` for the iOS Shortcut.
-*Done when:* the app installs to the home screen and dictated text creates inbox tasks.
+*Done:* PWA manifest and icons — the app installs to the home screen and opens
+on `/today`.
+*Not built:* Google Calendar sync, `.ics` export, `/api/capture`. Their env vars
+are commented out in `.env.example`; no code reads them.
+
+**Phase 7 — The goal layer and the learned loop. DONE.**
+Built after Phase 5, in response to using the app rather than to this plan.
+
+- **Direct manipulation.** Drag to move and resize blocks, editing the live plan
+  in place (including a committed one), with the checks re-run on drop.
+- **Log as you go.** Per-block done / partial / skipped on the ribbon, so the
+  day is logged as it happens; debrief pre-fills from it.
+- **Date navigation.** Plan any future day; past days are read-only.
+- **must_do_today.** A hard constraint distinct from priority, with a
+  deterministic fit check before any model call.
+- **The goal layer.** Bucket outcomes, `weekly_targets`, an optional task link,
+  and goal pressure fed into compose alongside deadlines and defer count.
+- **Two proposing modes.** Breakdown (conversational, strongest model, argues
+  from real capacity evidence) and the weekly kickoff. Neither writes.
+- **Learned focus hours.** Replaced declared sharp hours entirely.
+- **The plan-accounting invariant.** Every task that leaves a plan leaves a
+  trace.
+- **Capture for a future adaptive layer.** The columns a weekly reflection will
+  need, added now because unrecorded data is gone forever while analysis can be
+  added at any time.
+
+*Done when:* the daily loop runs off measured history rather than declared
+guesses, and nothing can leave a plan silently.
+
+**Not built, and deliberately so.** Google Calendar sync, `.ics` export, the
+capture endpoint, and the adaptive/weekly-reflection analysis. The last of these
+is waiting on weeks of real data, not on code.
 
 ---
 
