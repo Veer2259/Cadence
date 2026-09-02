@@ -67,7 +67,14 @@ export type ComposeInput = {
   planFromMin: number;
   timezone: string;
   workWindows: [string, string][];
-  sharpHours: [string, string][];
+  /**
+   * LEARNED focus hours, derived from history — a PREFERENCE, never a rule.
+   * Empty when there is not enough evidence yet, in which case
+   * `focusHoursKnown` is false and the planner is told to place deep work on
+   * the other signals alone rather than assume a morning.
+   */
+  focusHours: [string, string][];
+  focusHoursKnown: boolean;
   dailyCapMin: number;
   minBlockMin: number;
   maxBlockMin: number;

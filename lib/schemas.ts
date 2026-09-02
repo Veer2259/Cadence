@@ -182,7 +182,6 @@ const protectedBlock = z.object({
 export const dayProfileInput = z
   .object({
     workWindows: weeklyWindows,
-    sharpHours: weeklyWindows,
     dailyCapMin: z.coerce.number().int().min(30).max(1440),
     protectedBlocks: z.array(protectedBlock).max(20),
     minBlockMin: z.coerce.number().int().min(5).max(240),

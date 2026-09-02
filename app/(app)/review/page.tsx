@@ -1,7 +1,8 @@
 import { computeReview } from "@/lib/review";
 import { AccuracyChart, BucketChart, EnergyByHourChart } from "@/components/review/charts";
-import { MIN_DAYS } from "@/lib/energy";
 import { targetHistory, outcomeProjections } from "@/lib/goal-review";
+import { loadFocusScores } from "@/lib/focus-db";
+import { FocusHours } from "@/components/review/focus-hours";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export default async function ReviewPage() {
   const r = await computeReview();
   const history = await targetHistory(8);
   const projections = await outcomeProjections();
+  const focusRows = await loadFocusScores();
   const latest = r.accuracy.at(-1);
 
   return (
@@ -105,30 +107,23 @@ export default async function ReviewPage() {
         )}
       </Panel>
 
+      <Panel title="Focus hours — learned from your deep work">
+        <p className="mb-2 text-xs text-ink-muted">
+          Derived from deep-work blocks on debriefed days: how close each landed
+          to its estimate, and how often that slot got skipped. Green means the
+          planner prefers that hour. Override any hour where the data is plainly
+          wrong.
+        </p>
+        <FocusHours rows={focusRows} />
+      </Panel>
+
       <Panel title="Energy by time of day">
         <p className="mb-2 text-xs text-ink-muted">
-          Mean of your check-ins, last 30 days. The dashed line is the bar an hour
-          has to clear to count as a sharp hour.
+          Mean of your check-ins, last 30 days. Self-reported, and separate from
+          the focus hours above — those are measured from how deep work actually
+          went, not from how you felt.
         </p>
         <EnergyByHourChart data={r.energyByHour} />
-        {r.sharpSuggestion.sampleN > 0 ? (
-          <p className="mt-2 text-xs text-ink-muted">
-            {r.sharpSuggestion.sampleN} check-in
-            {r.sharpSuggestion.sampleN === 1 ? "" : "s"} across{" "}
-            {r.sharpSuggestion.dayN} day{r.sharpSuggestion.dayN === 1 ? "" : "s"}.{" "}
-            {r.sharpSuggestion.confident ? (
-              <>
-                Enough to act on — Settings can apply it to your sharp hours.
-              </>
-            ) : (
-              <>
-                Needs {Math.max(0, MIN_DAYS - r.sharpSuggestion.dayN)} more day
-                {MIN_DAYS - r.sharpSuggestion.dayN === 1 ? "" : "s"} before it is
-                worth acting on.
-              </>
-            )}
-          </p>
-        ) : null}
       </Panel>
 
       <Panel title="Calibration by category">

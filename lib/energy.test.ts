@@ -8,10 +8,6 @@ import assert from "node:assert/strict";
 import {
   bucketByHour,
   distinctDays,
-  suggestSharpWindows,
-  sameWindows,
-  MIN_SAMPLES_PER_HOUR,
-  MIN_DAYS,
   type EnergySample,
   type EnergyLevel,
 } from "./energy";
@@ -47,73 +43,9 @@ test("distinctDays counts days, not samples", () => {
   );
 });
 
-test("contiguous sharp hours merge into one window", () => {
-  const s = [
-    ...at(10, "sharp", 6),
-    ...at(11, "sharp", 6),
-    ...at(12, "sharp", 6),
-    ...at(16, "fried", 6),
-  ];
-  const out = suggestSharpWindows(s);
-  assert.ok(out.confident, JSON.stringify(out));
-  assert.deepEqual(out.windows, [["10:00", "13:00"]]);
-});
 
-test("a gap splits the run into two windows", () => {
-  const s = [
-    ...at(9, "sharp", 6),
-    ...at(10, "sharp", 6),
-    ...at(11, "fried", 6), // the dip
-    ...at(17, "sharp", 6),
-    ...at(18, "sharp", 6),
-  ];
-  const out = suggestSharpWindows(s);
-  assert.deepEqual(out.windows, [
-    ["09:00", "11:00"],
-    ["17:00", "19:00"],
-  ]);
-});
 
-test("a single sharp hour is dropped — shorter than the minimum window", () => {
-  const s = [...at(10, "sharp", 6), ...at(15, "fried", 6)];
-  // 10:00-11:00 is exactly 60 min, which IS the minimum, so it survives
-  assert.deepEqual(suggestSharpWindows(s).windows, [["10:00", "11:00"]]);
-});
 
-test("an hour below the sample floor cannot shape the suggestion", () => {
-  const thin = MIN_SAMPLES_PER_HOUR - 1;
-  const s = [...at(10, "sharp", thin, 0), ...at(11, "sharp", 6)];
-  const out = suggestSharpWindows(s);
-  // hour 10 is ignored, so the window starts at 11:00 not 10:00
-  assert.deepEqual(out.windows, [["11:00", "12:00"]]);
-});
 
-test("not confident until the log covers enough distinct days", () => {
-  // plenty of samples, but all on ONE day
-  const oneDay: EnergySample[] = Array.from({ length: 12 }, () => ({
-    date: "2026-09-01",
-    minuteOfDay: 10 * 60,
-    level: "sharp" as const,
-  }));
-  const out = suggestSharpWindows(oneDay);
-  assert.equal(out.dayN, 1);
-  assert.equal(out.confident, false, "one day must never be confident");
-  // it still reports what it is leaning towards
-  assert.deepEqual(out.windows, [["10:00", "11:00"]]);
 
-  const enough = at(10, "sharp", MIN_DAYS);
-  assert.equal(suggestSharpWindows(enough).confident, true);
-});
 
-test("a consistently mediocre day suggests no sharp hours at all", () => {
-  const s = [...at(9, "ok", 6), ...at(10, "ok", 6), ...at(11, "ok", 6)];
-  const out = suggestSharpWindows(s);
-  assert.deepEqual(out.windows, []);
-  assert.equal(out.confident, false);
-});
-
-test("sameWindows compares by value", () => {
-  assert.ok(sameWindows([["09:00", "12:30"]], [["09:00", "12:30"]]));
-  assert.ok(!sameWindows([["09:00", "12:30"]], [["10:00", "13:00"]]));
-  assert.ok(!sameWindows([], [["09:00", "10:00"]]));
-});

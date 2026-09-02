@@ -24,16 +24,6 @@ export const DEFAULT_WORK_WINDOWS: WeeklyWindows = {
   sun: [],
 };
 
-export const DEFAULT_SHARP_HOURS: WeeklyWindows = {
-  mon: [["09:00", "12:30"]],
-  tue: [["09:00", "12:30"]],
-  wed: [["09:00", "12:30"]],
-  thu: [["09:00", "12:30"]],
-  fri: [["09:00", "12:30"]],
-  sat: [["10:00", "12:00"]],
-  sun: [],
-};
-
 export const DEFAULT_PROTECTED_BLOCKS: ProtectedBlock[] = [
   { label: "lunch", start: "13:00", end: "14:00" },
   { label: "family / dinner", start: "20:00", end: "21:30" },
@@ -43,7 +33,6 @@ export const DEFAULT_PROTECTED_BLOCKS: ProtectedBlock[] = [
 export const DEFAULT_DAY_PROFILE = {
   id: 1 as const,
   workWindows: DEFAULT_WORK_WINDOWS,
-  sharpHours: DEFAULT_SHARP_HOURS,
   dailyCapMin: 600,
   protectedBlocks: DEFAULT_PROTECTED_BLOCKS,
   minBlockMin: 30,
@@ -55,10 +44,9 @@ export const DEFAULT_DAY_PROFILE = {
 /** Shape used across the app once the jsonb columns are narrowed. */
 export type DayProfileView = Omit<
   DayProfile,
-  "workWindows" | "sharpHours" | "protectedBlocks"
+  "workWindows" | "protectedBlocks"
 > & {
   workWindows: WeeklyWindows;
-  sharpHours: WeeklyWindows;
   protectedBlocks: ProtectedBlock[];
 };
 
@@ -66,7 +54,6 @@ function narrow(row: DayProfile): DayProfileView {
   return {
     ...row,
     workWindows: (row.workWindows ?? {}) as WeeklyWindows,
-    sharpHours: (row.sharpHours ?? {}) as WeeklyWindows,
     protectedBlocks: (row.protectedBlocks ?? []) as ProtectedBlock[],
   };
 }

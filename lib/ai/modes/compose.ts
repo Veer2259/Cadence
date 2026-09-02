@@ -24,6 +24,7 @@ import {
   WEEKDAY_KEYS,
 } from "@/lib/time";
 import { narrowCadence, isHabitDueOn } from "@/lib/habits";
+import { learnedFocusWindows } from "@/lib/focus-db";
 import { runStructured, CallBudget } from "@/lib/ai/provider";
 import { BUDGET } from "@/lib/ai/budget";
 import { planSchema, type PlanResult } from "@/lib/ai/schemas";
@@ -47,6 +48,8 @@ export async function buildComposeInput(
 ): Promise<ComposeInput> {
   const profile = await getOrCreateDayProfile();
   const weekday = istWeekdayKeyForDate(dateStr);
+  // Learned from history, not declared. Empty until there is real evidence.
+  const focus = await learnedFocusWindows();
 
   // Composing TODAY mid-day must not schedule into hours that have already
   // gone. Planning a future date starts from midnight as normal.
@@ -168,7 +171,8 @@ export async function buildComposeInput(
     timezone: IST,
     planFromMin,
     workWindows: clipFrom(windowsForWeekday(profile.workWindows, weekday), planFromMin),
-    sharpHours: clipFrom(windowsForWeekday(profile.sharpHours, weekday), planFromMin),
+    focusHours: clipFrom(focus.windows, planFromMin),
+    focusHoursKnown: focus.hasEvidence,
     dailyCapMin: profile.dailyCapMin,
     minBlockMin: profile.minBlockMin,
     maxBlockMin: profile.maxBlockMin,
@@ -193,11 +197,18 @@ export type ComposeOutcome = {
 const USER_INSTRUCTION = [
   "Here is today's planning payload as JSON. Produce the time-blocked plan.",
   "",
-  "Sharp hours are a PREFERENCE, not a constraint. Rule 3 says deep work belongs",
-  "inside them; it does not say deep work may happen ONLY there. When there is",
-  "more deep work than sharp time inside the working windows — which is common —",
-  "schedule the surplus outside the sharp hours and say so in the reason. Never",
-  "defer a task for want of sharp hours while ordinary working time is still free.",
+"`focusHours` are LEARNED from this person's own history, not declared, and they",
+  "are a PREFERENCE, never a constraint. Wherever rule 3 says \"sharp hours\", read",
+  "`focusHours`. Prefer them for deep work, but when there is more deep work than",
+  "focus time inside the working windows — which is common — schedule the surplus",
+  "outside them and say so in the reason. NEVER defer a task for want of focus",
+  "hours while ordinary working time is still free.",
+  "",
+  "When `focusHoursKnown` is false there is not yet enough history to know when",
+  "this person focuses well. Do NOT assume mornings or any other default. Place",
+  "deep work on the other signals alone — deadline pressure, priority, must-do,",
+  "and goal pressure — and say plainly in the calibrationNote that focus hours",
+  "are not yet known, so placement used deadlines and priority instead.",
   "",
   "Before putting anything in `overflow`, total the unscheduled minutes left in",
   "the working windows. If the task fits in that time it is NOT overflow, whatever",

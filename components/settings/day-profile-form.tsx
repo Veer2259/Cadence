@@ -23,7 +23,6 @@ type ProtectedBlock = { label: string; start: string; end: string };
 
 export type DayProfileFormValue = {
   workWindows: Partial<Weekly>;
-  sharpHours: Partial<Weekly>;
   dailyCapMin: number;
   minBlockMin: number;
   maxBlockMin: number;
@@ -43,32 +42,24 @@ export function DayProfileForm({ initial }: { initial: DayProfileFormValue }) {
   const [work, setWork] = useState<Record<DayKey, string>>(() =>
     toTextMap(initial.workWindows),
   );
-  const [sharp, setSharp] = useState<Record<DayKey, string>>(() =>
-    toTextMap(initial.sharpHours),
-  );
   const [blocks, setBlocks] = useState<ProtectedBlock[]>(initial.protectedBlocks);
 
   const parsed = useMemo(() => {
     const problems: string[] = [];
     const workOut: Partial<Weekly> = {};
-    const sharpOut: Partial<Weekly> = {};
     for (const [k, label] of DAYS) {
       const w = textToWindows(work[k]);
       if (w.error) problems.push(`${label} work — ${w.error}`);
       else workOut[k] = w.windows;
-      const s = textToWindows(sharp[k]);
-      if (s.error) problems.push(`${label} sharp — ${s.error}`);
-      else sharpOut[k] = s.windows;
     }
-    return { problems, workOut, sharpOut };
-  }, [work, sharp]);
+    return { problems, workOut };
+  }, [work]);
 
   const clientErrors = parsed.problems;
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
       <input type="hidden" name="workWindows" value={JSON.stringify(parsed.workOut)} />
-      <input type="hidden" name="sharpHours" value={JSON.stringify(parsed.sharpOut)} />
       <input
         type="hidden"
         name="protectedBlocks"
@@ -78,7 +69,7 @@ export function DayProfileForm({ initial }: { initial: DayProfileFormValue }) {
       />
 
       <div>
-        <h3 className="text-sm font-medium text-ink">Work windows &amp; sharp hours</h3>
+        <h3 className="text-sm font-medium text-ink">Work windows</h3>
         <p className="mt-1 text-xs text-ink-muted">
           One or more ranges per day, comma-separated. Example:{" "}
           <span className="tabular">09:00-13:00, 14:00-20:00</span>. Sharp hours
@@ -91,7 +82,6 @@ export function DayProfileForm({ initial }: { initial: DayProfileFormValue }) {
               <tr className="text-left text-xs text-ink-muted">
                 <th className="py-1 pr-3 font-medium">Day</th>
                 <th className="py-1 pr-3 font-medium">Work windows</th>
-                <th className="py-1 font-medium">Sharp hours</th>
               </tr>
             </thead>
             <tbody>
@@ -104,14 +94,6 @@ export function DayProfileForm({ initial }: { initial: DayProfileFormValue }) {
                       onChange={(e) => setWork({ ...work, [k]: e.target.value })}
                       placeholder="—"
                       className="tabular w-full min-w-[13rem]"
-                    />
-                  </td>
-                  <td className="py-1.5">
-                    <Input
-                      value={sharp[k]}
-                      onChange={(e) => setSharp({ ...sharp, [k]: e.target.value })}
-                      placeholder="—"
-                      className="tabular w-full min-w-[10rem]"
                     />
                   </td>
                 </tr>

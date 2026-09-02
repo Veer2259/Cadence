@@ -9,7 +9,7 @@ import { db } from "@/db";
 import { blocks, plans, timeLog, calibration, tasks, buckets } from "@/db/schema";
 import { istDateString } from "@/lib/time";
 import { loadEnergySamples } from "@/lib/energy-db";
-import { bucketByHour, suggestSharpWindows, type HourBucket, type SharpSuggestion } from "@/lib/energy";
+import { bucketByHour, type HourBucket } from "@/lib/energy";
 
 export type AccuracyPoint = { date: string; ratio: number; blocks: number };
 export type BucketHours = { bucket: string; hours7: number; hours30: number };
@@ -23,8 +23,6 @@ export type ReviewData = {
   deferLeaderboard: DeferRow[];
   /** mean energy per hour-of-day over the last 30 days */
   energyByHour: HourBucket[];
-  /** what that history says your sharp hours should be */
-  sharpSuggestion: SharpSuggestion;
 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -103,7 +101,6 @@ export async function computeReview(now = new Date()): Promise<ReviewData> {
   // --- energy ---
   const energySamples = await loadEnergySamples(30, now);
   const energyByHour = bucketByHour(energySamples);
-  const sharpSuggestion = suggestSharpWindows(energySamples);
 
   return {
     accuracy,
@@ -111,6 +108,5 @@ export async function computeReview(now = new Date()): Promise<ReviewData> {
     categories,
     deferLeaderboard: deferRows,
     energyByHour,
-    sharpSuggestion,
   };
 }

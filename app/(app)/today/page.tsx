@@ -13,6 +13,7 @@ import {
 } from "@/lib/time";
 import { getOrCreateDayProfile } from "@/lib/day-profile";
 import { getLivePlan, buildGeometryContext } from "@/lib/plan";
+import { learnedFocusWindows } from "@/lib/focus-db";
 import { checkDayGeometry } from "@/lib/plan-geometry";
 import type { PlanResult } from "@/lib/ai/schemas";
 import {
@@ -84,7 +85,9 @@ export default async function TodayPage({
   const weekday = istWeekdayKeyForDate(date);
   const workWindows = windowsForWeekday(profile.workWindows, weekday);
   const workRanges = toRanges(workWindows);
-  const sharpRanges = toRanges(windowsForWeekday(profile.sharpHours, weekday));
+  // Learned focus hours — empty until there is enough history, and that is the
+  // honest state rather than a default morning band.
+  const focusRanges = toRanges((await learnedFocusWindows()).windows);
 
   const nowMin = istMinutesOfDay(new Date());
   const inWindow =
@@ -210,12 +213,12 @@ export default async function TodayPage({
   // Sharp hours in particular often start before the first work window or block.
   const starts = [
     ...workRanges.map((r) => r.startMin),
-    ...sharpRanges.map((r) => r.startMin),
+    ...focusRanges.map((r) => r.startMin),
     ...blocks.map((b) => b.startMin),
   ];
   const ends = [
     ...workRanges.map((r) => r.endMin),
-    ...sharpRanges.map((r) => r.endMin),
+    ...focusRanges.map((r) => r.endMin),
     ...blocks.map((b) => b.endMin),
   ];
   const windowStartMin = starts.length ? Math.min(...starts) : 6 * 60;
@@ -279,7 +282,7 @@ export default async function TodayPage({
         windowStartMin={windowStartMin}
         windowEndMin={windowEndMin}
         workRanges={workRanges}
-        sharpRanges={sharpRanges}
+        focusRanges={focusRanges}
         protectedRanges={protectedRanges}
         blocks={blocks}
         isToday={realToday}

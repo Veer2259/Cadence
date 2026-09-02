@@ -25,13 +25,13 @@ export type ProtectedRange = Range & { label: string };
 
 const PX_PER_MIN = 1.25;
 const GUTTER_PX = 46;
-/** Sharp hours are marked with a hairline bracket in the gutter, not a
- *  full-width fill — the fill dominated the ribbon and competed with the blocks.
- *  The bracket sits in the gutter's right padding: hour labels are right-aligned
- *  and stop 8px short of the ribbon body, so it collides with nothing. */
-const SHARP_INSET_PX = 6;
-const SHARP_BRACKET_PX = 5;
-const SHARP_MARK_COLOR =
+/** LEARNED focus hours, marked with a hairline bracket in the gutter rather
+ *  than a fill. There is deliberately no band at all until the app has learned
+ *  something: an empty gutter is the honest rendering of "not known yet", and
+ *  a default morning band is the guess this replaced. */
+const FOCUS_INSET_PX = 6;
+const FOCUS_BRACKET_PX = 5;
+const FOCUS_MARK_COLOR =
   "color-mix(in srgb, var(--color-sharp) 35%, var(--color-ink-muted))";
 /** Drag / resize snap, in minutes. */
 const SNAP_MIN = 5;
@@ -231,7 +231,7 @@ export function Ribbon({
   windowStartMin,
   windowEndMin,
   workRanges,
-  sharpRanges,
+  focusRanges,
   protectedRanges,
   blocks,
   isToday,
@@ -242,7 +242,7 @@ export function Ribbon({
   windowStartMin: number;
   windowEndMin: number;
   workRanges: Range[];
-  sharpRanges: Range[];
+  focusRanges: Range[];
   protectedRanges: ProtectedRange[];
   blocks: RibbonBlock[];
   isToday: boolean;
@@ -416,9 +416,9 @@ export function Ribbon({
           />
         ))}
 
-        {/* sharp hours — a hairline bracket in the gutter. Enough to see where
-            they start and end; not enough to dominate the ribbon. */}
-        {sharpRanges.map((r, i) => {
+        {/* learned focus hours — a hairline bracket in the gutter. Absent
+            entirely while there is no evidence, which is the point. */}
+        {focusRanges.map((r, i) => {
           const band = clampBand(r.startMin, r.endMin);
           if (band.height <= 0) return null;
           return (
@@ -427,9 +427,9 @@ export function Ribbon({
               aria-hidden
               className="pointer-events-none absolute"
               style={{
-                left: GUTTER_PX - SHARP_INSET_PX,
-                width: SHARP_BRACKET_PX,
-                color: SHARP_MARK_COLOR,
+                left: GUTTER_PX - FOCUS_INSET_PX,
+                width: FOCUS_BRACKET_PX,
+                color: FOCUS_MARK_COLOR,
                 ...band,
               }}
             >

@@ -275,13 +275,41 @@ Singleton row. Enforce with a `CHECK (id = 1)` integer primary key.
 |---|---|---|
 | id | integer pk = 1 | |
 | work_windows | jsonb | per weekday: `{ mon: [["09:00","19:00"]], ... }` — array allows split days |
-| sharp_hours | jsonb | per weekday, same shape; when the user thinks clearly |
 | daily_cap_min | integer | hard ceiling on scheduled work, classes included |
 | protected_blocks | jsonb | recurring non-negotiables: meals, family, sleep |
 | min_block_min | integer default 30 | |
 | max_block_min | integer default 150 | |
 | break_min | integer default 15 | inserted between consecutive deep blocks |
 | timezone | text default 'Asia/Kolkata' | |
+
+### `focus_scores`
+LEARNED focus hours — one row per hour of day. **Replaces the declared
+`day_profile.sharp_hours`, which was removed in migration 0010.**
+
+| Column | Type | Notes |
+|---|---|---|
+| hour | integer pk | 0..23, IST. The hour is the key |
+| score | numeric nullable | 0..1, higher is better. Null until there are enough samples |
+| mean_ratio | numeric nullable | mean actual/estimate for deep work in this hour |
+| skip_rate | numeric | 0..1 |
+| sample_n | integer | |
+| manual_score | numeric nullable | a correction made by hand; always wins over `score` |
+| updated_at | timestamptz | |
+
+Asking someone to predict when they think clearly is a guess, and that guess
+caused a real bug: declared sharp hours of 09:00–12:30 against work windows of
+11:00–13:00 and 17:00–23:59 left only 90 usable minutes for 180 minutes of deep
+work, so a task was deferred with 235 free minutes in the day.
+
+So the app measures instead. Recomputed at debrief from DEEP-category task
+blocks on debriefed plans: how close actual came to estimate (only overrun is
+punished — finishing early says nothing bad about a slot) and how often the slot
+was skipped, combined multiplicatively so an always-skipped hour scores 0. A
+block is attributed to every hour it overlaps. An hour needs
+`MIN_FOCUS_SAMPLES` (3) before its score is used at all, mirroring calibration.
+
+Nothing was migrated from the old `sharp_hours` values: importing them would
+import exactly the bias this replaced.
 
 ### `chat_messages`
 For the assistant rail. `id, role, content, tool_calls jsonb, created_at`. Keep the last 200; prune older on write.
@@ -417,7 +445,8 @@ tier is ~5 requests/minute on the compose model.
   "now": "2026-09-01T04:30:00Z",
   "timezone": "Asia/Kolkata",
   "workWindows": [["09:00","13:00"],["14:00","20:00"]],
-  "sharpHours": [["09:00","12:30"]],
+  "focusHours": [["10:00","13:00"]],   // LEARNED; empty until there is evidence
+  "focusHoursKnown": true,             // false => say so, do not assume mornings
   "dailyCapMin": 600,
   "minBlockMin": 30, "maxBlockMin": 150, "breakMin": 15,
   "protectedBlocks": [{"label":"lunch","start":"13:00","end":"14:00"}],
@@ -439,7 +468,9 @@ tier is ~5 requests/minute on the compose model.
 }
 ```
 
-**Sharp hours are a preference, not a constraint.** Rule 3 of the verbatim system prompt says deep work "belongs inside the sharp hours". Taken as a hard constraint it defers work for no reason: a real plan had 420 free minutes against 185 minutes of work, yet deferred a 60-minute task because only 90 minutes of sharp time fell inside the working windows against 180 minutes of deep work. `USER_INSTRUCTION` therefore states that surplus deep work is scheduled OUTSIDE the sharp hours rather than deferred, and that `overflow` requires the unscheduled working minutes to be genuinely exhausted.
+**Focus hours are learned, and are a preference, not a constraint.** Rule 3 of the verbatim system prompt says deep work "belongs inside the sharp hours"; `USER_INSTRUCTION` tells the model to read that as `focusHours`. Taken as a hard constraint it defers work for no reason — that is the bug described under `focus_scores`. So surplus deep work is scheduled OUTSIDE the focus hours rather than deferred, and `overflow` requires the unscheduled working minutes to be genuinely exhausted.
+
+**The cold start is stated, not papered over.** When `focusHoursKnown` is false the model is told there is not yet enough history, instructed NOT to assume mornings or any other default, and told to place deep work on deadline pressure, priority, must-do and goal pressure alone — and to say so in the `calibrationNote`. A default morning assumption is precisely the guess this feature removed.
 
 **Every task leaves a trace.** A task present in a plan's input is either a block or an overflow row with a reason — never neither. Enforced by `lib/plan-invariant.ts`: `saveDraftPlan` asserts it INSIDE its transaction, so a plan that would lose a task is rolled back rather than saved; the edit paths re-audit afterwards and surface any loss as a warning. Dropping a block writes an overflow row, and a rebalance carries its parent's overflow forward.
 
@@ -656,7 +687,7 @@ Restraint everywhere except the ribbon.
 --ink:       #16191C   primary text
 --ink-muted: #6B7178   secondary text, reasons
 --rule:      #D8D8D0   hairlines, 1px, used liberally
---sharp:     #DDE5EA   the sharp-hours band on the ribbon
+--sharp:     #DDE5EA   tint for the learned focus-hours marker
 --signal:    #8C1D18   overflow, impossible, over-cap warnings
 --caution:   #A67C00   at_risk, tight
 --settled:   #2F5D50   done, safe
@@ -670,7 +701,12 @@ No border radius above 4px. No shadows. Separation comes from hairlines and whit
 
 A continuous vertical band representing the working window, where **block height is strictly proportional to duration**. A 30-minute block is visibly a third of a 90-minute block. This is the whole point: the user must be able to see that their day is full.
 
-- The sharp-hours range is shaded `--sharp` behind the blocks.
+- Learned focus hours are marked by a hairline bracket in the left gutter — a
+  1px spine with serifs at each end, in a muted mix of `--sharp` and
+  `--ink-muted`. NOT a shaded band: the full-width fill dominated the ribbon,
+  and it was the thing that painted over the page controls. When there is no
+  evidence yet the gutter is simply empty, which is the honest rendering of
+  "not known" — the ribbon never draws a default morning band.
 - A 1px `--ink` hairline marks the current time, with the time in mono in the left gutter. It moves.
 - Time gutter on the left, mono, hour marks only.
 - Fixed commitments render with a hatched fill so they're visually distinct from plannable work.
@@ -697,7 +733,7 @@ Accessibility floor: responsive to 380px, visible keyboard focus, `prefers-reduc
 
 **Review** — accuracy ratio over time trending toward 1.0 (the single most motivating chart in the app), hours per bucket for the last 7 and 30 days, per-category calibration ratios with sample counts, and the defer leaderboard: tasks pushed most often.
 
-**Goals** — the breakdown dialogue and the weekly kickoff, both proposing into a review list. **Settings** — day profile editor (work windows, sharp hours, cap, protected blocks), bucket CRUD, habit CRUD, Google Calendar connect/disconnect, capture token display.
+**Goals** — the breakdown dialogue and the weekly kickoff, both proposing into a review list. **Settings** — day profile editor (work windows, cap, protected blocks; focus hours are learned, not declared), bucket CRUD, habit CRUD, Google Calendar connect/disconnect, capture token display.
 
 **Chat rail** — collapsible right panel on desktop, bottom sheet on mobile. Present on every screen.
 
@@ -731,7 +767,7 @@ Each phase must run locally and pass its criteria before the next begins.
 
 **Phase 1 — Foundation, no AI.**
 Schema, migrations, seed script, auth, task and bucket CRUD, day profile editor, inbox screen.
-*Done when:* the user can add and edit tasks and buckets by hand, set their work windows and sharp hours, and log in and out. No model calls exist yet.
+*Done when:* the user can add and edit tasks and buckets by hand, set their work windows, and log in and out. No model calls exist yet.
 
 **Phase 2 — Compose and the ribbon.**
 The compose mode, plan and block persistence, the Today screen, the post-validation checks, plan commit.

@@ -21,6 +21,7 @@ import { istMinutesOfDay } from "@/lib/time";
 import type { EnergyLevel } from "@/lib/energy";
 import { nextRatio, sampleFor } from "@/lib/calibration";
 import { summariseDebrief, type DebriefDigest } from "@/lib/ai/modes/debrief";
+import { recomputeFocusScores } from "@/lib/focus-db";
 
 export type BlockStatus = "done" | "partial" | "skipped";
 
@@ -293,6 +294,17 @@ export async function submitDebrief(
     // 5. mark debriefed
     await tx.update(plans).set({ debriefedAt: now }).where(eq(plans.id, planId));
   });
+
+  // --- learned focus hours (outside the transaction) ---
+  // The day just became settled evidence, so the per-hour scores are rebuilt
+  // from scratch. Failure here must not fail the debrief: the numbers are a
+  // preference the planner can do without, and the day's actuals are already
+  // committed above.
+  try {
+    await recomputeFocusScores();
+  } catch (e) {
+    console.error("[debrief] focus score recompute failed:", e);
+  }
 
   // --- digest + summary (model call, outside the transaction) ---
   const catAgg = new Map<string, { planned: number; logged: number }>();

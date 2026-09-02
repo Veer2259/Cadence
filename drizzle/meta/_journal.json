@@ -71,6 +71,13 @@
       "when": 1788292924740,
       "tag": "0009_goal_layer",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788323650144,
+      "tag": "0010_learned_focus_hours",
+      "breakpoints": true
     }
   ]
 }

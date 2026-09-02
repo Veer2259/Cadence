@@ -392,8 +392,6 @@ export const dayProfile = pgTable(
     id: integer("id").primaryKey(), // always 1
     /** per weekday: { mon: [["09:00","19:00"]], ... } — array allows split days */
     workWindows: jsonb("work_windows").notNull(),
-    /** per weekday, same shape; when the user thinks clearly */
-    sharpHours: jsonb("sharp_hours").notNull(),
     /** hard ceiling on scheduled work, classes included */
     dailyCapMin: integer("daily_cap_min").notNull(),
     /** recurring non-negotiables: meals, family, sleep */
@@ -405,6 +403,37 @@ export const dayProfile = pgTable(
     timezone: text("timezone").notNull().default("Asia/Kolkata"),
   },
   (t) => [check("day_profile_singleton", sql`${t.id} = 1`)],
+);
+
+/* -------------------------------------------------------------------------- */
+/*  focus_scores — LEARNED focus hours, one row per hour of day                */
+/*                                                                             */
+/*  Replaces the declared day_profile.sharp_hours. Asking someone to predict   */
+/*  when they think clearly is a guess, and that guess contradicted the work   */
+/*  windows badly enough to defer real work. Recomputed at debrief from        */
+/*  deep-category blocks: how close actual came to estimate, and how often the */
+/*  slot was skipped.                                                          */
+/* -------------------------------------------------------------------------- */
+
+export const focusScores = pgTable(
+  "focus_scores",
+  {
+    /** 0..23, IST. One row per hour; the hour IS the key. */
+    hour: integer("hour").primaryKey(),
+    /** 0..1, higher is better. Null until there are enough samples. */
+    score: numeric("score", { precision: 4, scale: 2 }),
+    /** mean actual/estimate for deep work in this hour */
+    meanRatio: numeric("mean_ratio", { precision: 4, scale: 2 }),
+    skipRate: numeric("skip_rate", { precision: 4, scale: 2 }).notNull().default("0"),
+    sampleN: integer("sample_n").notNull().default(0),
+    /**
+     * Manual correction, 0..1. Always wins over the learned score — the
+     * evidence is shown on Review so a wrong hour can be overridden by hand.
+     */
+    manualScore: numeric("manual_score", { precision: 4, scale: 2 }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("focus_scores_hour_range", sql`${t.hour} >= 0 and ${t.hour} <= 23`)],
 );
 
 /* -------------------------------------------------------------------------- */
@@ -482,6 +511,8 @@ export type CalibrationRow = typeof calibration.$inferSelect;
 export type NewCalibrationRow = typeof calibration.$inferInsert;
 export type DayProfile = typeof dayProfile.$inferSelect;
 export type NewDayProfile = typeof dayProfile.$inferInsert;
+export type FocusScoreRow = typeof focusScores.$inferSelect;
+export type NewFocusScoreRow = typeof focusScores.$inferInsert;
 export type EnergyLogRow = typeof energyLog.$inferSelect;
 export type NewEnergyLogRow = typeof energyLog.$inferInsert;
 export type WeeklyTarget = typeof weeklyTargets.$inferSelect;

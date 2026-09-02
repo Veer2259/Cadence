@@ -12,6 +12,7 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { tasks, habits, commitments, calibration, type Block } from "@/db/schema";
 import { getCommittedPlan } from "@/lib/plan";
+import { learnedFocusWindows } from "@/lib/focus-db";
 import { getOrCreateDayProfile } from "@/lib/day-profile";
 import { applyCalibration, type CategoryRatio } from "@/lib/calibration";
 import {
@@ -66,7 +67,7 @@ export async function rebalancePlan(
   const profile = await getOrCreateDayProfile();
   const weekday = istWeekdayKeyForDate(dateStr);
   const dayWindows = windowsForWeekday(profile.workWindows, weekday);
-  const daySharp = windowsForWeekday(profile.sharpHours, weekday);
+  const dayFocus = (await learnedFocusWindows()).windows;
 
   const preserved = live.blocks.filter(
     (b) => b.status === "done" || b.status === "partial",
@@ -80,7 +81,7 @@ export async function rebalancePlan(
   const replanFromMin = Math.max(nowMin, latestPreservedEnd);
 
   const remainingWindows = clipFrom(dayWindows, replanFromMin);
-  const remainingSharp = clipFrom(daySharp, replanFromMin);
+  const remainingFocus = clipFrom(dayFocus, replanFromMin);
   const spentMin = preserved.reduce((n, b) => n + (b.actualMin ?? b.estimateMin), 0);
   const remainingCapMin = Math.max(0, profile.dailyCapMin - spentMin);
 
@@ -143,7 +144,7 @@ export async function rebalancePlan(
     timezone: IST,
     replanFrom: minutesToHm(replanFromMin),
     workWindows: remainingWindows,
-    sharpHours: remainingSharp,
+    focusHours: remainingFocus,
     remainingCapMin,
     minBlockMin: profile.minBlockMin,
     maxBlockMin: Math.min(REBALANCE_MAX_BLOCK_MIN, profile.maxBlockMin),
@@ -187,7 +188,8 @@ export async function rebalancePlan(
     planFromMin: 0,
     timezone: IST,
     workWindows: dayWindows,
-    sharpHours: daySharp,
+    focusHours: dayFocus,
+    focusHoursKnown: dayFocus.length > 0,
     dailyCapMin: profile.dailyCapMin,
     minBlockMin: profile.minBlockMin,
     maxBlockMin: profile.maxBlockMin,
