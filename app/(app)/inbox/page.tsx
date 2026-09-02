@@ -7,6 +7,15 @@ import { BrainDump } from "@/components/inbox/brain-dump";
 import { InboxControls } from "@/components/inbox/inbox-controls";
 import { TaskRow, type TaskView } from "@/components/inbox/task-row";
 
+
+/**
+ * Server Actions inherit maxDuration from the PAGE segment they are invoked
+ * from, not from the file they live in (Next.js route-segment config). Covers capture (the brain dump).
+ * 
+ * 300s is the Fluid compute ceiling on Vercel's Hobby plan. It is a ceiling,
+ * not a reservation — a fast call still costs only what it uses.
+ */
+export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
 export default async function InboxPage({

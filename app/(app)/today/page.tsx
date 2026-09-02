@@ -29,6 +29,16 @@ import { DayNav } from "@/components/today/day-nav";
 import { EnergyCheckin } from "@/components/today/energy-checkin";
 import { latestEnergyToday } from "@/lib/energy-db";
 
+/**
+ * Server Actions inherit maxDuration from the PAGE segment they are invoked
+ * from, not from the file they live in (Next.js route-segment config).
+ * Covers compose — "Plan my day" and "Re-plan".
+ *
+ * 300s is the Fluid compute ceiling on Vercel's Hobby plan. It is a ceiling,
+ * not a reservation: a fast call still costs only what it uses.
+ */
+export const maxDuration = 300;
+
 export const dynamic = "force-dynamic";
 
 function toRanges(windows: [string, string][]): Range[] {

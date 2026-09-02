@@ -24,12 +24,26 @@ const newsreader = Newsreader({
 export const metadata: Metadata = {
   title: "Cadence",
   description: "A day planner that can count.",
+  // PWA: /manifest.webmanifest comes from app/manifest.ts
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "Cadence",
+    // the status bar sits on --color-paper, so keep it light
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {
   themeColor: "#f7f7f4",
   width: "device-width",
   initialScale: 1,
+  // installed on a phone, the ribbon must not sit under the notch
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
