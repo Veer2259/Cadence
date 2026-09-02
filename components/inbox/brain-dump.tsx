@@ -10,6 +10,7 @@ import {
   confirmCapturedTasks,
 } from "@/app/(app)/inbox/actions";
 import type { CapturedTask } from "@/lib/ai/schemas";
+import { describeThrown } from "@/lib/thrown";
 
 type Draft = {
   include: boolean;
@@ -49,7 +50,13 @@ export function BrainDump({ buckets }: { buckets: { id: string; name: string }[]
     setError(null);
     setNote(null);
     start(async () => {
-      const res = await captureBrainDump(text, withAnswers);
+      let res;
+      try {
+        res = await captureBrainDump(text, withAnswers);
+      } catch (e) {
+        setError(describeThrown(e));
+        return;
+      }
       if (!res.ok) {
         setError(res.error);
         return;
@@ -79,7 +86,9 @@ export function BrainDump({ buckets }: { buckets: { id: string; name: string }[]
       return;
     }
     start(async () => {
-      const res = await confirmCapturedTasks({
+      let res;
+      try {
+        res = await confirmCapturedTasks({
         tasks: chosen.map((d) => ({
           title: d.title,
           bucketName: d.bucketName || null,
@@ -88,7 +97,11 @@ export function BrainDump({ buckets }: { buckets: { id: string; name: string }[]
           dueDate: d.dueDate || null,
           priority: d.priority,
         })),
-      });
+        });
+      } catch (e) {
+        setError(describeThrown(e));
+        return;
+      }
       if (!res.ok) {
         setError(res.errors.join("; "));
         return;

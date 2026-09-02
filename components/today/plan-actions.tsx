@@ -10,6 +10,7 @@ import {
   discardTodayPlan,
   type PlanActionResult,
 } from "@/app/(app)/today/actions";
+import { describeThrown } from "@/lib/thrown";
 
 const PROGRESS = [
   "Reading your active tasks…",
@@ -65,7 +66,16 @@ export function PlanActions({
     setProgress(isCompose);
     setStartTick(tick);
     start(async () => {
-      const res = await fn();
+      // Returned failures render below; a THROWN one (function timeout, dropped
+      // connection) would otherwise reject unhandled and leave the button stuck.
+      let res: PlanActionResult;
+      try {
+        res = await fn();
+      } catch (e) {
+        setProgress(false);
+        setError(describeThrown(e));
+        return;
+      }
       setProgress(false);
       if (!res.ok) {
         setError(res.error);

@@ -8,6 +8,7 @@ import {
   submitDebriefAction,
   type DebriefActionResult,
 } from "@/app/(app)/debrief/actions";
+import { describeThrown } from "@/lib/thrown";
 
 export type DebriefBlock = {
   id: string;
@@ -88,8 +89,12 @@ export function DebriefForm({
           actualMin: r.status === "skipped" ? null : r.actualMin,
         };
       });
-      const res = await submitDebriefAction({ planId, entries });
-      setResult(res);
+      try {
+        setResult(await submitDebriefAction({ planId, entries }));
+      } catch (e) {
+        // A thrown failure used to leave the button pending with nothing shown.
+        setResult({ ok: false, error: describeThrown(e) });
+      }
     });
   }
 

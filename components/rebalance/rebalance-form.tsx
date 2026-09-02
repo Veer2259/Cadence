@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { Button, Textarea } from "@/components/ui/controls";
 import { rebalanceAction } from "@/app/(app)/rebalance/actions";
+import { describeThrown } from "@/lib/thrown";
 
 const ENERGY = [
   { key: "sharp", label: "Sharp" },
@@ -28,7 +29,18 @@ export function RebalanceForm({
     setError(null);
     setWarnings([]);
     start(async () => {
-      const res = await rebalanceAction({ account, energy });
+      // The action RETURNS its expected failures (quota, rate limit, budget).
+      // A thrown one — a function timeout, a dropped connection, a 500 from the
+      // Server Action endpoint — used to reject unhandled, leaving the button
+      // stuck on "Replanning…" with nothing on screen. Silence is the worst
+      // possible report.
+      let res;
+      try {
+        res = await rebalanceAction({ account, energy });
+      } catch (e) {
+        setError(describeThrown(e));
+        return;
+      }
       if (!res.ok) {
         setError(res.error);
         return;

@@ -9,6 +9,7 @@ import {
   clearBreakdown,
 } from "@/app/(app)/goals/actions";
 import type { BreakdownTurn } from "@/lib/ai/schemas";
+import { describeThrown } from "@/lib/thrown";
 
 type Msg = { role: "user" | "assistant"; content: string };
 type Proposal = NonNullable<BreakdownTurn["proposal"]>;
@@ -57,7 +58,13 @@ export function BreakdownPanel({
     setInput("");
     setMessages((m) => [...m, { role: "user", content: text }]);
     start(async () => {
-      const res = await sendBreakdown(bucketId, text);
+      let res;
+      try {
+        res = await sendBreakdown(bucketId, text);
+      } catch (e) {
+        setError(describeThrown(e));
+        return;
+      }
       if (!res.ok) {
         setError(res.error);
         return;
@@ -80,7 +87,9 @@ export function BreakdownPanel({
 
   function accept() {
     start(async () => {
-      const res = await acceptBreakdown({
+      let res;
+      try {
+        res = await acceptBreakdown({
         bucketId,
         outcome: outcome.trim(),
         outcomeTargetDate: targetDate || null,
@@ -91,7 +100,11 @@ export function BreakdownPanel({
             description: r.description.trim(),
             targetHours: r.targetHours === "" ? null : Number(r.targetHours),
           })),
-      });
+        });
+      } catch (e) {
+        setError(describeThrown(e));
+        return;
+      }
       if (!res.ok) {
         setError(res.error ?? "Could not save.");
         return;

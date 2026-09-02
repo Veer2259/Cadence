@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Input, Select } from "@/components/ui/controls";
 import { runKickoff, confirmKickoff } from "@/app/(app)/goals/actions";
+import { describeThrown } from "@/lib/thrown";
 
 const CATEGORIES = ["deep", "shallow", "calls", "admin", "errand", "personal"] as const;
 
@@ -38,7 +39,13 @@ export function KickoffPanel({
     setError(null);
     setSaved(null);
     start(async () => {
-      const res = await runKickoff(weekStart);
+      let res;
+      try {
+        res = await runKickoff(weekStart);
+      } catch (e) {
+        setError(describeThrown(e));
+        return;
+      }
       if (!res.ok) {
         setError(res.error);
         return;
@@ -60,7 +67,9 @@ export function KickoffPanel({
   function confirm() {
     if (!rows) return;
     start(async () => {
-      const res = await confirmKickoff({
+      let res;
+      try {
+        res = await confirmKickoff({
         tasks: rows
           .filter((r) => r.keep && r.title.trim())
           .map((r) => ({
@@ -69,7 +78,11 @@ export function KickoffPanel({
             category: r.category,
             estimateMin: r.estimateMin,
           })),
-      });
+        });
+      } catch (e) {
+        setError(describeThrown(e));
+        return;
+      }
       if (!res.ok) {
         setError(res.error ?? "Could not save.");
         return;
