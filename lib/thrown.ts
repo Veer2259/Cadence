@@ -13,14 +13,22 @@
  * A wrong guess at the cause is still better than silence; silence is
  * indistinguishable from the app having hung.
  */
+import { unstable_rethrow } from "next/navigation";
+
 export function describeThrown(e: unknown): string {
+  // redirect() / notFound() throw framework-controlled errors that Next.js is
+  // meant to handle — requireAuth() redirects to /login exactly this way.
+  // Swallowing one would turn a bounce to the login page into a red error
+  // message and strand the person. Rethrow before interpreting anything.
+  unstable_rethrow(e);
+
   const msg = e instanceof Error ? e.message : String(e ?? "");
 
   if (/failed to fetch|networkerror|load failed|connection|aborted/i.test(msg)) {
     return (
-      "The request never came back. The planner was cut off mid-call — usually " +
-      "the server's time limit, so check Fluid compute is on in Vercel. " +
-      "Nothing was saved; try again."
+      "The request never came back — the planner was cut off mid-call rather " +
+      "than failing cleanly, so it could not say why. The server log for this " +
+      "request has the real reason. Nothing was saved; try again."
     );
   }
 
