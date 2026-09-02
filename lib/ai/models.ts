@@ -26,10 +26,11 @@ const MODELS: Record<ProviderName, Record<ModelRole, string>> = {
     compose: "gemini-3.7-flash",
     // Lightweight — capture parsing, classification, debrief summary.
     capture: "gemini-3.5-flash-lite",
-    // Strongest available — breakdown only. It runs a few times a quarter, so
-    // it can afford the best model and a tight daily cap; compose, which runs
-    // every day, stays on the cheaper one.
-    reason: "gemini-3.7-pro",
+    // Breakdown only. "Strongest available" is constrained by what this
+    // project can actually CALL: every Pro model (gemini-2.5-pro,
+    // gemini-3.1-pro-preview, gemini-pro-latest) reports 0/0 quota here, so
+    // 3.7 Flash is the ceiling. Verified against ListModels, not guessed.
+    reason: "gemini-3.7-flash",
   },
   anthropic: {
     // SPEC section 6 strings.
@@ -53,4 +54,20 @@ function envOverride(provider: ProviderName, role: ModelRole): string | undefine
 
 export function modelFor(role: ModelRole, provider: ProviderName = activeProvider()): string {
   return envOverride(provider, role) ?? MODELS[provider][role];
+}
+
+export const MODEL_ROLES: ModelRole[] = ["compose", "capture", "reason"];
+
+/** Every model id this process would actually use, and where it came from. */
+export function configuredModels(
+  provider: ProviderName = activeProvider(),
+): { role: ModelRole; id: string; source: "env" | "default" }[] {
+  return MODEL_ROLES.map((role) => {
+    const env = envOverride(provider, role);
+    return {
+      role,
+      id: env ?? MODELS[provider][role],
+      source: env ? ("env" as const) : ("default" as const),
+    };
+  });
 }

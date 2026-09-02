@@ -361,8 +361,9 @@ or route handlers.
 
 ### Models
 
-Three roles, not two. `reason` is the strongest model available and is used by
-**breakdown only** — that mode runs a few times a quarter, so it can afford the
+Model ids are **verified against the provider, never guessed**. `instrumentation.ts` runs `reportModelIds()` once at server start: it calls Gemini ListModels and logs a clear warning for any configured id that does not resolve, with near-match suggestions. The check is time-bounded (5s), never throws, and never blocks boot — a missing key or dead network logs "not verified", not an error. A wrong id otherwise only surfaces as a 404 buried in whichever mode used it.
+
+Three roles, not two. `reason` is used by **breakdown only** and is the strongest model this project can actually CALL — which is not the same as the strongest that exists. Every Pro model on this key (gemini-2.5-pro, gemini-3.1-pro-preview, gemini-pro-latest) reports 0/0 quota, so the ceiling is `gemini-3.7-flash` — that mode runs a few times a quarter, so it can afford the
 best model and a tight daily cap. `compose` runs every day and stays on the
 cheaper model. `capture` stays on the lightweight one.
 
