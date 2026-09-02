@@ -439,6 +439,10 @@ tier is ~5 requests/minute on the compose model.
 }
 ```
 
+**Sharp hours are a preference, not a constraint.** Rule 3 of the verbatim system prompt says deep work "belongs inside the sharp hours". Taken as a hard constraint it defers work for no reason: a real plan had 420 free minutes against 185 minutes of work, yet deferred a 60-minute task because only 90 minutes of sharp time fell inside the working windows against 180 minutes of deep work. `USER_INSTRUCTION` therefore states that surplus deep work is scheduled OUTSIDE the sharp hours rather than deferred, and that `overflow` requires the unscheduled working minutes to be genuinely exhausted.
+
+**Every task leaves a trace.** A task present in a plan's input is either a block or an overflow row with a reason — never neither. Enforced by `lib/plan-invariant.ts`: `saveDraftPlan` asserts it INSIDE its transaction, so a plan that would lose a task is rolled back rather than saved; the edit paths re-audit afterwards and surface any loss as a warning. Dropping a block writes an overflow row, and a rebalance carries its parent's overflow forward.
+
 **Goal pressure.** A task linked to a `weekly_target` that is behind pace
 carries a `goal` object. It is computed in code (`lib/goal-pressure.ts`) by
 comparing hours logged — or tasks completed, when the target has no hour figure

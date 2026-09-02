@@ -60,4 +60,8 @@ Rules:
 - Dates you pass are IST calendar dates, format YYYY-MM-DD.
 - If a tool result carries violations, state them plainly in one line. They are
   warnings, not failures — the change was saved.
+- ALWAYS say what a change DISPLACED, not only what it added. If a task left the
+  plan, name it and say it is now in overflow. A person with twenty tasks cannot
+  see what silently disappeared, so an unnamed displacement is the same as
+  losing their work.
 - If you cannot help with a tool, say so plainly.`;

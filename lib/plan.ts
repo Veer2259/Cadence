@@ -32,6 +32,7 @@ import {
   type GeometryContext,
   type GeoBlock,
 } from "@/lib/plan-geometry";
+import { assertTasksAccountedFor, type TaskRef } from "@/lib/plan-invariant";
 import type { ComposeInput } from "@/lib/ai/compose-types";
 import type { PlanBlock, PlanResult } from "@/lib/ai/schemas";
 
@@ -176,7 +177,39 @@ export async function saveDraftPlan(args: {
       }));
     if (overflowRows.length) await tx.insert(overflow).values(overflowRows);
 
+    // THE INVARIANT — inside the transaction, so a plan that would lose a task
+    // is rolled back rather than saved. Loud beats silent: with twenty tasks in
+    // flight, a task that vanishes without an overflow row is invisible.
+    assertTasksAccountedFor({
+      inputTasks: input.tasks.map((t): TaskRef => ({ id: t.id, title: t.title })),
+      blockTaskIds: allRows.map((r) => r.taskId ?? null),
+      overflowTaskIds: overflowRows.map((r) => r.taskId),
+    });
+
     return planRow.id;
+  });
+}
+
+/**
+ * Re-check the invariant against what is actually in the database for a plan.
+ * Used after edit paths, which mutate rows outside saveDraftPlan.
+ */
+export async function auditPlanAccounting(planId: string): Promise<TaskRef[]> {
+  const planRow = await db.query.plans.findFirst({ where: eq(plans.id, planId) });
+  if (!planRow) return [];
+  const snap = (planRow.inputSnapshot ?? null) as { tasks?: TaskRef[] } | null;
+  const inputTasks = (snap?.tasks ?? []).map((t) => ({ id: t.id, title: t.title }));
+  if (inputTasks.length === 0) return [];
+
+  const [bl, ov] = await Promise.all([
+    db.select({ taskId: blocks.taskId }).from(blocks).where(eq(blocks.planId, planId)),
+    db.select({ taskId: overflow.taskId }).from(overflow).where(eq(overflow.planId, planId)),
+  ]);
+  const { findUnaccountedTasks } = await import("@/lib/plan-invariant");
+  return findUnaccountedTasks({
+    inputTasks,
+    blockTaskIds: bl.map((b) => b.taskId),
+    overflowTaskIds: ov.map((o) => o.taskId),
   });
 }
 
@@ -377,20 +410,53 @@ export async function placeHabitBlock(args: {
   return { ...(await finishBlockEdit(dateStr, live.plan.id)), moved: false };
 }
 
-/** Remove one block from the live plan (the assistant's confirmed `drop`). */
+/**
+ * Remove one block from the live plan (the assistant's confirmed `drop`, or a
+ * displacement).
+ *
+ * A task block does NOT simply disappear: dropping it writes an overflow row so
+ * the task still has a trace and a reason. This is the path that once lost a
+ * task silently — with twenty in flight, nobody would have noticed.
+ */
 export async function dropPlanBlock(args: {
   dateStr: string;
   blockId: string;
-}): Promise<BlockEditResult> {
+  reason?: string;
+}): Promise<BlockEditResult & { deferredTask?: string }> {
   const { dateStr, blockId } = args;
   const live = await getLivePlan(dateStr);
   if (!live) return { ok: false, error: "There is no plan to adjust today." };
-  if (!live.blocks.some((b) => b.id === blockId)) {
-    return { ok: false, error: "That block is not on today's plan." };
-  }
+  const block = live.blocks.find((b) => b.id === blockId);
+  if (!block) return { ok: false, error: "That block is not on today's plan." };
 
-  await db.delete(blocks).where(eq(blocks.id, blockId));
-  return finishBlockEdit(dateStr, live.plan.id);
+  const reason =
+    args.reason?.trim() ||
+    "Removed from the plan by hand; nothing was scheduled in its place.";
+
+  await db.transaction(async (tx) => {
+    await tx.delete(blocks).where(eq(blocks.id, blockId));
+
+    // A task leaving the plan gets an overflow row. Habits, breaks and fixed
+    // blocks have no task to account for, so they need none.
+    if (block.taskId) {
+      const stillScheduled = live.blocks.some(
+        (b) => b.id !== blockId && b.taskId === block.taskId,
+      );
+      const alreadyDeferred = live.overflow.some((o) => o.taskId === block.taskId);
+      if (!stillScheduled && !alreadyDeferred) {
+        await tx.insert(overflow).values({
+          planId: live.plan.id,
+          taskId: block.taskId,
+          reason,
+          action: "defer",
+          suggestion: "Carry it to another day, or shrink it to fit today.",
+        });
+      }
+    }
+  });
+
+  const res = await finishBlockEdit(dateStr, live.plan.id);
+  return { ...res, deferredTask: block.taskId ? block.title : undefined };
 }
 
 /** Re-read the plan's blocks, re-run the geometry checks, keep the snapshot honest. */
@@ -418,6 +484,17 @@ async function finishBlockEdit(
       .update(plans)
       .set({ outputSnapshot: { ...snap, blocks: rows.map(blockRowToPlanBlock) } })
       .where(eq(plans.id, planId));
+  }
+
+  const lost = await auditPlanAccounting(planId);
+  if (lost.length) {
+    // Not thrown: the edit already happened and the row is gone. Surfacing it
+    // in the warnings is what makes it visible instead of silent.
+    violations.push(
+      ...lost.map(
+        (t) => `"${t.title}" is no longer on the plan and has no overflow record`,
+      ),
+    );
   }
 
   return { ok: true, violations };

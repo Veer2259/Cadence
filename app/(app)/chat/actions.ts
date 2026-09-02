@@ -77,16 +77,25 @@ export async function confirmChatAction(input: unknown): Promise<ConfirmResult> 
     if (parsed.data.kind === "drop_block") {
       const blockId = z.string().uuid().safeParse(parsed.data.params.blockId);
       if (!blockId.success) return { ok: false, error: "Unknown block." };
-      const res = await dropPlanBlock({ dateStr: date, blockId: blockId.data });
+      const title = String(parsed.data.params.title ?? "the block");
+      const res = await dropPlanBlock({
+        dateStr: date,
+        blockId: blockId.data,
+        reason: "Displaced by an assistant edit — you asked for something else in this slot.",
+      });
       if (!res.ok) {
         await appendAssistantNote(`Couldn't drop that: ${res.error}`);
         return { ok: false, error: res.error };
       }
       revalidatePath("/today");
-      const title = String(parsed.data.params.title ?? "the block");
+      // Say what LEFT the plan, not just that something happened — a
+      // displacement the person cannot see is the same as losing the task.
+      const displaced = res.deferredTask
+        ? ` "${res.deferredTask}" is now in overflow for today.`
+        : "";
       const note = res.violations.length
-        ? `Dropped "${title}". Heads up: ${res.violations.join("; ")}.`
-        : `Dropped "${title}" from the plan.`;
+        ? `Dropped "${title}".${displaced} Heads up: ${res.violations.join("; ")}.`
+        : `Dropped "${title}".${displaced}`;
       await appendAssistantNote(note);
       return { ok: true, note, changed: true };
     }

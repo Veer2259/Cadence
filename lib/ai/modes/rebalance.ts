@@ -120,6 +120,14 @@ export async function rebalancePlan(
       };
     });
 
+  // --- tasks the PARENT already deferred ---
+  // These have no block, so they were invisible to the open-block scan above
+  // and disappeared entirely from the new plan — no block, no overflow row, no
+  // trace. Carry them forward so they stay accounted for.
+  const carriedOverflow = live.overflow.filter(
+    (o) => !completedTaskIds.has(o.taskId) && !openTaskIds.includes(o.taskId),
+  );
+
   // --- habits from open habit blocks ---
   const openHabitIds = [...new Set(openBlocks.filter((b) => b.habitId).map((b) => b.habitId as string))];
   const habitRows = openHabitIds.length
@@ -211,6 +219,34 @@ export async function rebalancePlan(
     calibration: payload.calibration,
   };
 
+  // stubs for the carried-over tasks, so the accounting invariant sees them
+  const carriedTaskRows = carriedOverflow.length
+    ? await db.select().from(tasks).where(inArray(tasks.id, carriedOverflow.map((o) => o.taskId)))
+    : [];
+  for (const t of carriedTaskRows) {
+    fullDayContext.tasks.push({
+      id: t.id,
+      title: t.title,
+      bucket: null,
+      category: t.category,
+      rawEstimateMin: t.estimateMin ?? DEFAULT_ESTIMATE_MIN,
+      calibratedEstimateMin: t.estimateMin ?? DEFAULT_ESTIMATE_MIN,
+      dueAt: t.dueAt ? t.dueAt.toISOString() : null,
+      priority: t.priority,
+      deferCount: t.deferCount,
+      mustDoToday: t.mustDoToday,
+    });
+  }
+
+  // The model plans only the remaining window and is not asked to re-litigate
+  // what was already deferred, so their overflow rows are re-attached verbatim.
+  const carriedOverflowRows = carriedOverflow.map((o) => ({
+    taskId: o.taskId,
+    reason: o.reason,
+    action: o.action,
+    suggestion: o.suggestion,
+  }));
+
   const preservedPlanBlocks = preserved.map(blockToPlanBlock);
   const userMsg = `Rebalance the rest of the day. Payload:\n\n${JSON.stringify(payload, null, 2)}`;
 
@@ -269,9 +305,18 @@ export async function rebalancePlan(
     });
   }
 
+  // carried rows join whatever the model deferred this round
+  const mergedOverflow = [
+    ...newPlan.overflow,
+    ...carriedOverflowRows.filter(
+      (c) => !newPlan.overflow.some((o) => o.taskId === c.taskId),
+    ),
+  ];
+  newPlan = { ...newPlan, overflow: mergedOverflow };
+
   const combined: PlanResult = {
     blocks: [...preservedPlanBlocks, ...newPlan.blocks],
-    overflow: newPlan.overflow,
+    overflow: mergedOverflow,
     calibrationNote: newPlan.calibrationNote,
   };
 

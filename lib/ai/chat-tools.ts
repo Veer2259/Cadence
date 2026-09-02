@@ -368,6 +368,9 @@ export async function executeChatTool(
             start: minutesToHm(startMin),
             end: minutesToHm(Math.min(1440, endMin)),
           },
+          displacementNote:
+            "If this overlaps existing work, say WHICH block it clashes with — " +
+            "never let something leave the plan without naming it.",
           // true = the habit was already on today's plan and was moved, not duplicated
           movedExisting: res.moved === true,
           violations: res.violations,
@@ -467,6 +470,10 @@ export async function executeChatTool(
             end: minutesToHm(Math.min(1440, endMin)),
           },
           violations: res.violations,
+          note:
+            res.violations.length > 0
+              ? "Tell the person what this now conflicts with, in one line."
+              : undefined,
         },
       };
     }
