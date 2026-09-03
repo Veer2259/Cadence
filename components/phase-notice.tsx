@@ -10,8 +10,8 @@ export function PhaseNotice({
 }) {
   return (
     <section>
-      <h1 className="font-mono text-lg tracking-tight text-ink">{title}</h1>
-      <div className="mt-4 border border-rule bg-surface p-4" style={{ borderRadius: "var(--radius)" }}>
+      <h1 className="text-[30px] leading-none font-extrabold tracking-[-0.03em] text-ink">{title}</h1>
+      <div className="mt-4 rounded-[18px] bg-surface p-4 shadow-card">
         <p className="text-sm text-ink">{children}</p>
         <p className="mt-2 text-xs text-ink-muted">Arrives in {phase}.</p>
       </div>

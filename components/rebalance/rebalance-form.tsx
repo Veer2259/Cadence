@@ -15,8 +15,14 @@ const ENERGY = [
 
 export function RebalanceForm({
   remaining,
+  leftMin,
+  lockedCount,
 }: {
   remaining: { title: string; startLabel: string; status: string }[];
+  /** Minutes left in the working day, for the LEFT tile. */
+  leftMin: number;
+  /** Blocks already done or partial — they are carried through untouched. */
+  lockedCount: number;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -54,50 +60,66 @@ export function RebalanceForm({
     });
   }
 
+  const hrs = (m: number) => {
+    const h = Math.floor(m / 60);
+    const r = m % 60;
+    if (h && r) return `${h}h ${r}m`;
+    if (h) return `${h}h`;
+    return `${r}m`;
+  };
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="animate-rise-in flex flex-col gap-3">
       <div>
-        <h1 className="font-mono text-lg tracking-tight text-ink">Rebalance</h1>
-        <p className="judgment mt-1 text-sm text-ink-muted">
+        <h1 className="text-[30px] leading-none font-extrabold tracking-[-0.03em] text-ink">
+          Rebalance
+        </h1>
+        <p className="mt-1.5 text-[13.5px] leading-[1.5] font-medium text-ink-muted">
           Blocks you have already marked done or partial stay exactly where they
           are. Only the rest of the day gets replanned.
         </p>
       </div>
 
-      {remaining.length > 0 ? (
-        <div className="border border-rule bg-surface p-3 text-sm" style={{ borderRadius: "var(--radius)" }}>
-          <p className="mb-1 text-xs font-medium tracking-wide text-ink-muted uppercase">
-            Still open ({remaining.length})
+      <div className="flex gap-2.5">
+        <div className="flex-1 rounded-2xl bg-tint px-3 py-2.5">
+          <p className="text-[10px] font-bold tracking-[0.1em] text-ink-soft uppercase">
+            Left
           </p>
-          <ul className="tabular text-xs text-ink-muted">
-            {remaining.map((r, i) => (
-              <li key={i}>
-                {r.startLabel} · {r.title}
-                {r.status === "skipped" ? " (skipped)" : ""}
-              </li>
-            ))}
-          </ul>
+          <p className="tabular mt-0.5 text-[16px] font-extrabold text-ink">
+            {hrs(Math.max(0, leftMin))}
+          </p>
         </div>
-      ) : (
-        <p className="text-sm text-ink-muted">Every block is already done — nothing to replan.</p>
-      )}
+        <div className="flex-1 rounded-2xl bg-tint px-3 py-2.5">
+          <p className="text-[10px] font-bold tracking-[0.1em] text-ink-soft uppercase">
+            To place
+          </p>
+          <p className="tabular mt-0.5 text-[16px] font-extrabold text-ink">
+            {remaining.length}
+          </p>
+        </div>
+        <div className="flex-1 rounded-2xl bg-primary-tint px-3 py-2.5">
+          <p className="text-[10px] font-bold tracking-[0.1em] text-primary-deep uppercase">
+            Locked
+          </p>
+          <p className="tabular mt-0.5 text-[16px] font-extrabold text-primary-deep">
+            {lockedCount} done
+          </p>
+        </div>
+      </div>
 
-      <label className="flex flex-col gap-1">
-        <span className="text-xs text-ink-muted">What happened?</span>
+      <label className="mt-1 flex flex-col gap-1.5">
+        <span className="text-[12px] font-bold text-ink-soft">What changed?</span>
         <Textarea
           value={account}
           onChange={(e) => setAccount(e.target.value)}
           placeholder="e.g. the morning call ran long, skipped the gym, feeling scattered"
-          className="min-h-[4rem] w-full"
+          className="min-h-[5rem] w-full"
         />
       </label>
 
       <div>
-        <span className="text-xs text-ink-muted">Energy</span>
-        <div
-          className="mt-1 flex w-max overflow-hidden border border-rule"
-          style={{ borderRadius: "var(--radius)" }}
-        >
+        <span className="text-[12px] font-bold text-ink-soft">Energy</span>
+        <div className="mt-1.5 flex gap-2">
           {ENERGY.map((e) => (
             <button
               key={e.key}
@@ -105,8 +127,8 @@ export function RebalanceForm({
               aria-pressed={energy === e.key}
               onClick={() => setEnergy(e.key)}
               className={cn(
-                "px-4 py-2 text-sm font-medium",
-                energy === e.key ? "bg-ink text-paper" : "bg-surface text-ink-muted hover:text-ink",
+                "min-h-[38px] flex-1 rounded-full text-[13px] font-extrabold",
+                energy === e.key ? "bg-ink text-paper" : "bg-tint text-ink-soft",
               )}
             >
               {e.label}
@@ -114,19 +136,48 @@ export function RebalanceForm({
           ))}
         </div>
         {energy === "fried" ? (
-          <p className="mt-1 text-xs text-ink-muted">No deep work will be scheduled.</p>
+          <p className="mt-1.5 text-[11.5px] font-semibold text-ink-faint">
+            No deep work will be scheduled.
+          </p>
         ) : null}
       </div>
 
+      {remaining.length > 0 ? (
+        <div className="rounded-[18px] bg-surface p-3.5 shadow-card">
+          <p className="mb-1.5 text-[11px] font-extrabold tracking-[0.12em] text-ink-soft uppercase">
+            Still on the board ({remaining.length})
+          </p>
+          <ul className="flex flex-col gap-1">
+            {remaining.map((r, i) => (
+              <li key={i} className="flex items-baseline gap-2.5">
+                <span className="tabular w-11 shrink-0 text-[12px] font-bold text-ink-faint">
+                  {r.startLabel}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">
+                  {r.title}
+                  {r.status === "skipped" ? " (skipped)" : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="rounded-[18px] bg-surface px-4 py-5 text-[13.5px] font-medium text-ink-muted shadow-card">
+          Every block is already done — nothing to replan.
+        </p>
+      )}
+
       {error ? (
-        <p role="alert" className="text-sm text-signal">
+        <p role="alert" className="text-[13px] font-semibold text-warn">
           {error}
         </p>
       ) : null}
       {warnings.length ? (
-        <div className="border border-caution/50 bg-surface p-3 text-xs" style={{ borderRadius: "var(--radius)" }}>
-          <p className="mb-1 font-medium text-caution">Saved with checks still failing:</p>
-          <ul className="list-disc pl-4">
+        <div className="rounded-2xl border border-warn-line bg-warn-tint p-3.5">
+          <p className="mb-1 text-[13px] font-extrabold text-warn">
+            Saved with checks still failing:
+          </p>
+          <ul className="list-disc pl-4 text-[12.5px] font-medium text-ink-muted">
             {warnings.map((w) => (
               <li key={w}>{w}</li>
             ))}
@@ -134,11 +185,12 @@ export function RebalanceForm({
         </div>
       ) : null}
 
-      <div>
-        <Button onClick={submit} disabled={pending} className="px-5 py-2.5">
-          {pending ? "Replanning the rest of the day…" : "Rebalance"}
-        </Button>
-      </div>
+      <Button onClick={submit} disabled={pending} size="lg" className="mt-1 w-full">
+        {pending ? "Replanning the rest of the day…" : "Rebalance the rest of the day"}
+      </Button>
+      <p className="text-center text-[11.5px] font-semibold text-ink-faint">
+        This produces a draft. Nothing is committed until you say so on Today.
+      </p>
     </div>
   );
 }

@@ -116,13 +116,13 @@ export function KickoffPanel({
       </div>
 
       {error ? (
-        <p role="alert" className="text-sm text-signal">
+        <p role="alert" className="text-sm text-warn">
           {error}
         </p>
       ) : null}
-      {saved ? <p className="text-sm text-settled">{saved}</p> : null}
+      {saved ? <p className="text-sm text-primary">{saved}</p> : null}
       {note ? (
-        <p className="judgment border-l-2 border-rule pl-3 text-sm text-ink-muted">{note}</p>
+        <p className="border-l-2 border-line pl-3 text-sm text-ink-muted">{note}</p>
       ) : null}
 
       {rows ? (
@@ -131,9 +131,9 @@ export function KickoffPanel({
             Uncheck anything you do not want, edit the rest. Nothing is saved
             until you confirm. Keeping {(keptMin / 60).toFixed(1)}h of work.
           </p>
-          <ul className="flex flex-col gap-2 border-t border-rule pt-2">
+          <ul className="flex flex-col gap-2 border-t border-line pt-2">
             {rows.map((r, i) => (
-              <li key={i} className="flex flex-wrap items-end gap-2 border-b border-rule pb-2">
+              <li key={i} className="flex flex-wrap items-end gap-2 border-b border-line pb-2">
                 <label className="flex items-center gap-1.5 pb-1.5 text-xs text-ink-muted">
                   <input
                     type="checkbox"
@@ -210,7 +210,7 @@ export function KickoffPanel({
                   />
                 </label>
                 {r.reason ? (
-                  <p className="judgment w-full text-xs text-ink-muted">{r.reason}</p>
+                  <p className="w-full text-xs text-ink-muted">{r.reason}</p>
                 ) : null}
               </li>
             ))}

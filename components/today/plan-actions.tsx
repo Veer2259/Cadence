@@ -27,7 +27,6 @@ export function PlanActions({
   isToday = true,
   debriefed = false,
   isRebalance = false,
-  inWindow = false,
 }: {
   status: "none" | "draft" | "committed";
   planId?: string;
@@ -41,7 +40,6 @@ export function PlanActions({
   isToday?: boolean;
   debriefed?: boolean;
   isRebalance?: boolean;
-  inWindow?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -89,7 +87,7 @@ export function PlanActions({
   // A past day is a record: show its plan, offer nothing that would change it.
   if (readOnly) {
     return (
-      <span className="text-xs text-ink-muted">
+      <span className="text-[12px] font-semibold text-ink-faint">
         {status === "none" ? "No plan for this day." : "Past day — read only."}
       </span>
     );
@@ -125,8 +123,21 @@ export function PlanActions({
             >
               Discard
             </Button>
+            {/* Rebalance needs a COMMITTED plan — it replans the remainder of a
+                day already underway. Showing it here keeps it one tap from the
+                day instead of buried under More, but on a draft it is disabled
+                and says why, rather than linking to a dead end. */}
+            {isToday ? (
+              <span
+                title="Commit the plan first — rebalance replans a day already underway."
+                className="inline-flex min-h-[42px] cursor-not-allowed items-center rounded-full bg-tint px-4 text-sm font-extrabold text-ink-faint opacity-60"
+                aria-disabled="true"
+              >
+                Rebalance
+              </span>
+            ) : null}
             {isRebalance ? (
-              <span className="text-xs text-ink-muted">
+              <span className="w-full text-[11.5px] font-semibold text-ink-faint">
                 Rebalance draft — committing supersedes the earlier plan.
               </span>
             ) : null}
@@ -135,51 +146,49 @@ export function PlanActions({
 
         {status === "committed" && !debriefed ? (
           <>
-            {inWindow && isToday ? (
+            {/* Was gated on being inside a work window, which meant the button
+                vanished exactly when a day had gone off the rails early or run
+                late — the two times you most want to replan. */}
+            {isToday ? (
               <Link
                 href="/rebalance"
-                className="border border-rule bg-surface px-3 py-1.5 text-sm font-medium text-ink hover:border-ink"
-                style={{ borderRadius: "var(--radius)" }}
+                className="inline-flex min-h-[42px] items-center rounded-full bg-tint px-4 text-sm font-extrabold text-ink-muted"
               >
                 Rebalance
               </Link>
             ) : null}
             <Link
               href="/debrief"
-              className="bg-ink px-3 py-1.5 text-sm font-medium text-paper"
-              style={{ borderRadius: "var(--radius)" }}
+              className="inline-flex min-h-[42px] items-center rounded-full bg-ink px-4 text-sm font-extrabold text-paper"
             >
-              Debrief the day
+              Close the day
             </Link>
           </>
         ) : null}
 
         {status === "committed" && debriefed ? (
-          <span className="text-xs text-ink-muted">Day closed.</span>
+          <span className="text-[12px] font-semibold text-ink-faint">Day closed.</span>
         ) : null}
       </div>
 
       {pending && progress ? (
-        <p className="text-sm text-ink-muted" aria-live="polite">
+        <p className="text-[13px] font-semibold text-ink-soft" aria-live="polite">
           {message}
         </p>
       ) : null}
 
       {error ? (
-        <p role="alert" className="text-sm text-signal">
+        <p role="alert" className="text-[13px] font-semibold text-warn">
           {error}
         </p>
       ) : null}
 
       {warnings.length ? (
-        <div
-          className="border border-caution/50 bg-surface p-3 text-xs text-ink"
-          style={{ borderRadius: "var(--radius)" }}
-        >
-          <p className="mb-1 font-medium text-caution">
+        <div className="rounded-2xl border border-warn-line bg-warn-tint p-3.5">
+          <p className="mb-1 text-[13px] font-extrabold text-warn">
             The plan was saved, but these checks still failed:
           </p>
-          <ul className="list-disc pl-4">
+          <ul className="list-disc pl-4 text-[12.5px] font-medium text-ink-muted">
             {warnings.map((w) => (
               <li key={w}>{w}</li>
             ))}

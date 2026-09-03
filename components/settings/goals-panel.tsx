@@ -38,7 +38,7 @@ export type TargetRow = {
 function Errors({ errors }: { errors: string[] }) {
   if (!errors.length) return null;
   return (
-    <ul role="alert" className="mt-1 list-disc pl-5 text-xs text-signal">
+    <ul role="alert" className="mt-1 list-disc pl-5 text-xs text-warn">
       {errors.map((e) => (
         <li key={e}>{e}</li>
       ))}
@@ -49,7 +49,7 @@ function Errors({ errors }: { errors: string[] }) {
 function BucketGoalRow({ b }: { b: GoalBucket }) {
   const [open, setOpen] = useState(false);
   return (
-    <li className="border-b border-rule py-2 last:border-b-0">
+    <li className="border-b border-line py-2 last:border-b-0">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <span className="text-sm text-ink">{b.name}</span>
@@ -81,7 +81,7 @@ function BucketGoalRow({ b }: { b: GoalBucket }) {
       {open ? (
         <form
           action={saveBucketGoal}
-          className="mt-2 flex flex-wrap items-end gap-2 border-t border-rule pt-2"
+          className="mt-2 flex flex-wrap items-end gap-2 border-t border-line pt-2"
         >
           <input type="hidden" name="bucketId" value={b.id} />
           <Labeled label="Outcome — what done looks like, one sentence">
@@ -127,7 +127,7 @@ function TargetRowView({ t }: { t: TargetRow }) {
   ].filter(Boolean);
 
   return (
-    <li className="border-b border-rule py-2 last:border-b-0">
+    <li className="border-b border-line py-2 last:border-b-0">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <span className="text-sm text-ink">{t.description}</span>
@@ -154,7 +154,7 @@ function TargetRowView({ t }: { t: TargetRow }) {
       {editing ? (
         <form
           onSubmit={onSubmit}
-          className="mt-2 flex flex-wrap items-end gap-2 border-t border-rule pt-2"
+          className="mt-2 flex flex-wrap items-end gap-2 border-t border-line pt-2"
         >
           <input type="hidden" name="id" value={t.id} />
           <input type="hidden" name="bucketId" value={t.bucketId} />
@@ -223,7 +223,7 @@ export function GoalsPanel({
         <h3 className="mb-2 text-xs font-medium tracking-wide text-ink-muted uppercase">
           Outcomes
         </h3>
-        <ul className="border-t border-rule">
+        <ul className="border-t border-line">
           {goalBuckets.map((b) => (
             <BucketGoalRow key={b.id} b={b} />
           ))}
@@ -275,13 +275,13 @@ export function GoalsPanel({
         </form>
 
         {targets.length ? (
-          <ul className="mt-3 border-t border-rule">
+          <ul className="mt-3 border-t border-line">
             {targets.map((t) => (
               <TargetRowView key={t.id} t={t} />
             ))}
           </ul>
         ) : (
-          <p className="mt-3 border-t border-rule py-4 text-sm text-ink-muted">
+          <p className="mt-3 border-t border-line py-4 text-sm text-ink-muted">
             No targets for this week yet.
           </p>
         )}

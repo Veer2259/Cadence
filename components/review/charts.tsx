@@ -15,7 +15,7 @@ import {
 import type { AccuracyPoint, BucketHours } from "@/lib/review";
 import { SHARP_THRESHOLD, type HourBucket } from "@/lib/energy";
 
-const AXIS = { fontSize: 11, fontFamily: "var(--font-mono)", fill: "var(--color-ink-muted)" };
+const AXIS = { fontSize: 11, fontFamily: "var(--font-sans)", fill: "var(--color-ink-muted)" };
 const GRID = "var(--color-rule)";
 
 export function AccuracyChart({ data }: { data: AccuracyPoint[] }) {
@@ -38,7 +38,7 @@ export function AccuracyChart({ data }: { data: AccuracyPoint[] }) {
             contentStyle={{
               border: "1px solid var(--color-rule)",
               borderRadius: 3,
-              fontFamily: "var(--font-mono)",
+              fontFamily: "var(--font-sans)",
               fontSize: 11,
             }}
             formatter={(v) => [`${v}×`, "actual / estimate"]}
@@ -71,7 +71,7 @@ export function BucketChart({ data }: { data: BucketHours[] }) {
             contentStyle={{
               border: "1px solid var(--color-rule)",
               borderRadius: 3,
-              fontFamily: "var(--font-mono)",
+              fontFamily: "var(--font-sans)",
               fontSize: 11,
             }}
             formatter={(v, n) => [`${v}h`, n === "hours7" ? "last 7d" : "last 30d"]}
@@ -120,7 +120,7 @@ export function EnergyByHourChart({ data }: { data: HourBucket[] }) {
             contentStyle={{
               border: "1px solid var(--color-rule)",
               borderRadius: 3,
-              fontFamily: "var(--font-mono)",
+              fontFamily: "var(--font-sans)",
               fontSize: 11,
             }}
             formatter={(v, _n, item) => {

@@ -86,7 +86,7 @@ export function DayProfileForm({ initial }: { initial: DayProfileFormValue }) {
             </thead>
             <tbody>
               {DAYS.map(([k, label]) => (
-                <tr key={k} className="border-t border-rule">
+                <tr key={k} className="border-t border-line">
                   <td className="py-1.5 pr-3 text-ink-muted">{label}</td>
                   <td className="py-1.5 pr-3">
                     <Input
@@ -190,7 +190,7 @@ export function DayProfileForm({ initial }: { initial: DayProfileFormValue }) {
               <button
                 type="button"
                 onClick={() => setBlocks(blocks.filter((_, j) => j !== i))}
-                className="text-xs text-signal underline underline-offset-2"
+                className="text-xs text-warn underline underline-offset-2"
               >
                 remove
               </button>
@@ -209,21 +209,21 @@ export function DayProfileForm({ initial }: { initial: DayProfileFormValue }) {
       </div>
 
       {clientErrors.length > 0 ? (
-        <ul role="alert" className="list-disc pl-5 text-xs text-signal">
+        <ul role="alert" className="list-disc pl-5 text-xs text-warn">
           {clientErrors.map((e) => (
             <li key={e}>{e}</li>
           ))}
         </ul>
       ) : null}
       {state.errors.length > 0 ? (
-        <ul role="alert" className="list-disc pl-5 text-xs text-signal">
+        <ul role="alert" className="list-disc pl-5 text-xs text-warn">
           {state.errors.map((e) => (
             <li key={e}>{e}</li>
           ))}
         </ul>
       ) : null}
       {state.ok && state !== INITIAL && clientErrors.length === 0 ? (
-        <p className="text-xs text-settled">Saved.</p>
+        <p className="text-xs text-primary">Saved.</p>
       ) : null}
 
       <div>

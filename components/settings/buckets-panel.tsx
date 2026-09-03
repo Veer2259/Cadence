@@ -25,7 +25,7 @@ type Bucket = {
 function Errors({ errors }: { errors: string[] }) {
   if (!errors.length) return null;
   return (
-    <ul role="alert" className="mt-1 list-disc pl-5 text-xs text-signal">
+    <ul role="alert" className="mt-1 list-disc pl-5 text-xs text-warn">
       {errors.map((e) => (
         <li key={e}>{e}</li>
       ))}
@@ -65,11 +65,11 @@ function BucketRow({ bucket }: { bucket: Bucket }) {
   const { editing, toggle, errors, pending, onSubmit } = useEditorForm(updateBucket);
 
   return (
-    <li className="border-b border-rule py-2 last:border-b-0">
+    <li className="border-b border-line py-2 last:border-b-0">
       <div className="flex items-center gap-3">
         <span
           aria-hidden
-          className="inline-block h-3.5 w-3.5 shrink-0 border border-rule"
+          className="inline-block h-3.5 w-3.5 shrink-0 border border-line"
           style={{ backgroundColor: bucket.color, borderRadius: "2px" }}
         />
         <div className="min-w-0 flex-1">
@@ -105,7 +105,7 @@ function BucketRow({ bucket }: { bucket: Bucket }) {
       </div>
 
       {editing ? (
-        <form onSubmit={onSubmit} className="mt-2 flex flex-wrap items-end gap-2 border-t border-rule pt-2">
+        <form onSubmit={onSubmit} className="mt-2 flex flex-wrap items-end gap-2 border-t border-line pt-2">
           <input type="hidden" name="id" value={bucket.id} />
           <Labeled label="Name">
             <Input name="name" defaultValue={bucket.name} required />
@@ -137,7 +137,7 @@ function BucketRow({ bucket }: { bucket: Bucket }) {
       {editing ? (
         <form
           action={saveBucketTarget}
-          className="mt-2 flex flex-wrap items-end gap-2 border-t border-rule pt-2"
+          className="mt-2 flex flex-wrap items-end gap-2 border-t border-line pt-2"
         >
           <input type="hidden" name="bucketId" value={bucket.id} />
           <Labeled
@@ -170,13 +170,13 @@ export function BucketsPanel({ buckets }: { buckets: Bucket[] }) {
     <div className="flex flex-col gap-3">
       <AddBucket />
       {buckets.length > 0 ? (
-        <ul className="border-t border-rule">
+        <ul className="border-t border-line">
           {buckets.map((b) => (
             <BucketRow key={b.id} bucket={b} />
           ))}
         </ul>
       ) : (
-        <p className="border-t border-rule py-4 text-sm text-ink-muted">
+        <p className="border-t border-line py-4 text-sm text-ink-muted">
           No buckets yet. Add one above — they are yours to name.
         </p>
       )}

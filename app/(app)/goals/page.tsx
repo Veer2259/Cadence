@@ -28,7 +28,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-t border-rule pt-5">
+    <section className="border-t border-line pt-5">
       <h2 className="text-sm font-medium tracking-wide text-ink uppercase">{title}</h2>
       {description ? (
         <p className="mt-1 mb-3 text-xs text-ink-muted">{description}</p>
@@ -65,8 +65,8 @@ export default async function GoalsPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-mono text-lg tracking-tight text-ink">Goals</h1>
-        <p className="judgment mt-1 text-sm text-ink-muted">
+        <h1 className="text-[30px] leading-none font-extrabold tracking-[-0.03em] text-ink">Goals</h1>
+        <p className="mt-1 text-sm text-ink-muted">
           What each bucket is for, and this week&rsquo;s slice of it. Both modes
           below propose into a list you confirm or edit — neither writes anything
           on its own.

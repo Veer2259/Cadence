@@ -1,29 +1,70 @@
 @import "tailwindcss";
 
 /*
-  Design tokens — section 9 of SPEC.md.
-  This is an instrument, not a productivity product: one light theme, hairlines
-  and whitespace instead of shadows, nothing rounded past 4px.
+  Design tokens — the "Daylight" mobile direction.
+
+  This REPLACES the instrument language that SPEC.md §9 describes (IBM Plex,
+  #F7F7F4 paper, hairlines, nothing rounded past 4px). Warm paper, Manrope
+  throughout, pills and soft shadows. Functional behaviour is untouched:
+  proportional block heights, learned focus hours, overflow, calibration.
+
+  SPEC.md §9 is now out of date and should be rewritten to match.
 */
 @theme {
-  --color-paper: #f7f7f4; /* page background */
-  --color-surface: #ffffff; /* cards, blocks */
-  --color-ink: #16191c; /* primary text */
-  --color-ink-muted: #6b7178; /* secondary text, reasons */
-  --color-rule: #d8d8d0; /* hairlines, 1px, used liberally */
-  --color-sharp: #dde5ea; /* the sharp-hours band on the ribbon */
-  --color-signal: #8c1d18; /* overflow, impossible, over-cap warnings */
-  --color-caution: #a67c00; /* at_risk, tight */
-  --color-settled: #2f5d50; /* done, safe */
+  /* ---- Surface ---- */
+  --color-paper: #fdf8f0; /* app background */
+  --color-surface: #ffffff; /* cards, sheets, rows */
+  --color-tint: #f2ede2; /* inset chips, stat tiles, inputs, inactive tabs */
+  --color-line: #efe6d6; /* hairlines, ribbon spine, ring track */
 
-  /* IBM Plex Sans for UI, IBM Plex Mono for every number, Newsreader for judgment */
-  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, -apple-system,
+  /* ---- Ink ---- */
+  --color-ink: #2a2419; /* primary text */
+  --color-ink-muted: #6e6353; /* body copy inside cards */
+  --color-ink-soft: #8c8272; /* secondary labels */
+  --color-ink-faint: #a79c8a; /* meta, timestamps, placeholders */
+  --color-ink-ghost: #c4b9a6; /* chevrons, strike-through rule */
+
+  /* ---- Signal ---- */
+  --color-primary: #0f9d58; /* emerald: primary actions, now-line, progress */
+  --color-primary-deep: #0b7b45; /* gradient end, text on tinted green */
+  --color-primary-tint: #e8f5ec; /* success / locked panels */
+  --color-warn: #d6522a; /* overflow, must-do, at-risk, destructive */
+  --color-warn-tint: #fbede6; /* overflow card background */
+  --color-warn-line: #f3d9cb; /* overflow card border */
+  --color-caution: #e0a100; /* partial status, calibration over 1.15x */
+
+  /* ---- Bucket colours: block bars, dots, week bars ---- */
+  --color-bucket-growth: #0f9d58;
+  --color-bucket-churn: #c8641e;
+  --color-bucket-ops: #7a8ca3;
+  --color-bucket-personal: #7c5bd6;
+  --color-bucket-fixed: #b8afa0;
+
+  /*
+    Manrope alone. IBM Plex Sans, IBM Plex Mono and Newsreader are retired —
+    numbers no longer need a mono face, weight 800 at -.03em carries them.
+  */
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", sans-serif;
-  --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", "Cascadia Mono",
-    monospace;
-  --font-serif: var(--font-newsreader), ui-serif, Georgia, "Times New Roman", serif;
 
-  --radius: 3px;
+  /* ---- Shape ---- */
+  --radius-pill: 999px; /* every button, chip, tab and badge */
+  --radius-card: 18px; /* cards: 16–22 depending on prominence */
+  --radius-sheet: 28px; /* bottom sheets, top corners only */
+  --radius-input: 14px; /* inputs: 12–18 */
+
+  /* ---- Shadows: soft and warm, never grey ---- */
+  --shadow-card: 0 2px 8px rgba(42, 36, 25, 0.05);
+  --shadow-raised: 0 2px 10px rgba(42, 36, 25, 0.07);
+  --shadow-hero: 0 3px 14px rgba(42, 36, 25, 0.08);
+  --shadow-open: 0 4px 16px rgba(42, 36, 25, 0.1);
+  --shadow-tab: 0 1px 3px rgba(42, 36, 25, 0.12);
+  --shadow-sheet: 0 -8px 30px rgba(42, 36, 25, 0.16);
+}
+
+/* A few components still reach for var(--radius) inline. */
+:root {
+  --radius: 16px;
 }
 
 html {
@@ -38,18 +79,128 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Mono digits must line up in columns — that is the whole point of using it. */
-.tabular,
-input[type="time"],
-input[type="date"],
-input[type="number"] {
-  font-family: var(--font-mono);
-  font-feature-settings: "tnum" 1;
+/*
+  These MUST stay inside @layer base. Unlayered CSS outranks every layered rule,
+  so `button { color: inherit }` at the top level silently beats `text-paper`
+  and every other text utility on a button — a dark pill with an invisible
+  label, and no warning anywhere.
+*/
+@layer base {
+  button {
+    font-family: inherit;
+    color: inherit;
+    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+  }
+
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+  }
 }
 
-/* The book face, used for exactly two things: block reasons + the overflow heading. */
+/*
+  Numbers used to be set in IBM Plex Mono so columns of times would line up.
+  Manrope has proper tabular figures, so the alignment survives the switch —
+  the class stays because a lot of markup asks for it.
+*/
+.tabular {
+  font-feature-settings: "tnum" 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Was Newsreader, for block reasons and the overflow heading. Now just weight. */
 .judgment {
-  font-family: var(--font-serif);
+  font-weight: 500;
+}
+
+/* ---- Motion. Every one of these is suppressed below. ---- */
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes sheetUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pop {
+  0% {
+    transform: scale(0.86);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes ringDraw {
+  from {
+    stroke-dasharray: 0 182;
+  }
+}
+@keyframes spark {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+@keyframes glow {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-rise-in {
+  animation: riseIn 300ms ease-out both;
+}
+.animate-sheet-up {
+  animation: sheetUp 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-fade-in {
+  animation: fadeIn 180ms ease-out both;
+}
+.animate-pop {
+  animation: pop 360ms ease-out both;
+}
+.animate-ring-draw {
+  animation: ringDraw 900ms ease-out both;
+}
+.animate-spark {
+  animation: spark 2.6s ease-in-out infinite;
+}
+.animate-glow {
+  animation: glow 2.2s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -63,6 +214,6 @@ input[type="number"] {
 
 /* Visible keyboard focus everywhere. */
 :focus-visible {
-  outline: 2px solid var(--color-ink);
-  outline-offset: 1px;
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }

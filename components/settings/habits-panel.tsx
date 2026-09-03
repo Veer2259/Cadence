@@ -28,7 +28,7 @@ type BucketOpt = { id: string; name: string };
 function Errors({ errors }: { errors: string[] }) {
   if (!errors.length) return null;
   return (
-    <ul role="alert" className="mt-1 list-disc pl-5 text-xs text-signal">
+    <ul role="alert" className="mt-1 list-disc pl-5 text-xs text-warn">
       {errors.map((e) => (
         <li key={e}>{e}</li>
       ))}
@@ -89,7 +89,7 @@ function HabitRow({ habit, buckets }: { habit: Habit; buckets: BucketOpt[] }) {
   ].filter(Boolean);
 
   return (
-    <li className="border-b border-rule py-2 last:border-b-0">
+    <li className="border-b border-line py-2 last:border-b-0">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <span className="text-sm text-ink">{habit.name}</span>
@@ -119,7 +119,7 @@ function HabitRow({ habit, buckets }: { habit: Habit; buckets: BucketOpt[] }) {
       </div>
 
       {editing ? (
-        <form onSubmit={onSubmit} className="mt-2 flex flex-wrap items-end gap-2 border-t border-rule pt-2">
+        <form onSubmit={onSubmit} className="mt-2 flex flex-wrap items-end gap-2 border-t border-line pt-2">
           <input type="hidden" name="id" value={habit.id} />
           <Labeled label="Name">
             <Input name="name" defaultValue={habit.name} required />
@@ -185,13 +185,13 @@ export function HabitsPanel({
     <div className="flex flex-col gap-3">
       <AddHabit buckets={buckets} />
       {habits.length > 0 ? (
-        <ul className="border-t border-rule">
+        <ul className="border-t border-line">
           {habits.map((h) => (
             <HabitRow key={h.id} habit={h} buckets={buckets} />
           ))}
         </ul>
       ) : (
-        <p className="border-t border-rule py-4 text-sm text-ink-muted">
+        <p className="border-t border-line py-4 text-sm text-ink-muted">
           No habits yet. These are recurring things you want placed — gym,
           reading, a weekly call.
         </p>

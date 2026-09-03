@@ -50,7 +50,7 @@ export function AddCommitment({ date }: { date?: string }) {
   return (
     <form
       onSubmit={onSubmit}
-      className="flex flex-wrap items-end gap-2 border border-rule bg-surface p-2"
+      className="flex flex-wrap items-end gap-2 rounded-[18px] bg-surface p-3 shadow-card"
       style={{ borderRadius: "var(--radius)" }}
     >
       <Labeled label="What">
@@ -73,7 +73,7 @@ export function AddCommitment({ date }: { date?: string }) {
         Cancel
       </button>
       {errors.length ? (
-        <ul role="alert" className="w-full list-disc pl-5 text-xs text-signal">
+        <ul role="alert" className="w-full list-disc pl-5 text-xs text-warn">
           {errors.map((e) => (
             <li key={e}>{e}</li>
           ))}

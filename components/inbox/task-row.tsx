@@ -10,6 +10,20 @@ import { CATEGORIES, PRIORITIES } from "@/lib/schemas";
 import { Button, Input, Labeled, Select, Textarea } from "@/components/ui/controls";
 import { useEditorForm } from "@/components/ui/use-editor-form";
 
+/** A stable colour per bucket name, so the same bucket reads the same everywhere. */
+const DOTS = [
+  "var(--color-bucket-growth)",
+  "var(--color-bucket-churn)",
+  "var(--color-bucket-ops)",
+  "var(--color-bucket-personal)",
+];
+function bucketDot(name: string | null): string {
+  if (!name) return "var(--color-bucket-fixed)";
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return DOTS[h % DOTS.length];
+}
+
 export type TaskView = {
   id: string;
   title: string;
@@ -37,13 +51,13 @@ function StatusButton({
   id: string;
   status: string;
   children: React.ReactNode;
-  variant?: "solid" | "quiet" | "danger";
+  variant?: "primary" | "dark" | "quiet" | "danger";
 }) {
   return (
     <form action={setTaskStatus}>
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="status" value={status} />
-      <Button type="submit" variant={variant} className="px-2 py-1 text-xs">
+      <Button type="submit" variant={variant}>
         {children}
       </Button>
     </form>
@@ -79,28 +93,47 @@ export function TaskRow({
   }
 
   return (
-    <li className="border-b border-rule py-2 last:border-b-0">
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm text-ink">
-            {task.mustDoToday ? (
-              <span
-                className="mr-1.5 border border-signal px-1 py-0.5 align-middle font-mono text-[10px] tracking-wide text-signal uppercase"
-                style={{ borderRadius: "var(--radius)" }}
-                title="Must do today — compose cannot defer this"
-              >
-                must
-              </span>
-            ) : null}
+    <li
+      className={`rounded-[18px] bg-surface p-3.5 ${editing ? "shadow-open" : "shadow-card"}`}
+    >
+      {/* The whole row is the disclosure control — a 14px chevron is not a tap
+          target, and this card is used one-handed. */}
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={editing}
+        className="flex w-full items-center gap-2.5 text-left"
+      >
+        <span
+          aria-hidden
+          className="block h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ background: bucketDot(task.bucketName) }}
+        />
+        <span className="min-w-0 flex-1">
+          {task.mustDoToday ? (
+            <span className="mb-1 inline-block rounded-full bg-warn-tint px-2 py-0.5 text-[10px] font-extrabold tracking-[0.06em] text-warn uppercase">
+              Must do today
+            </span>
+          ) : null}
+          <span className="block truncate text-[14.5px] font-bold text-ink">
             {task.title}
-          </p>
-          <p className="tabular mt-0.5 text-xs text-ink-muted">
+          </span>
+          <span className="block truncate text-[11.5px] font-semibold text-ink-faint">
             {task.bucketName ? `${task.bucketName} · ` : ""}
             {meta.join(" · ")}
-          </p>
-        </div>
+          </span>
+        </span>
+        <span
+          aria-hidden
+          className="shrink-0 text-ink-ghost transition-transform duration-[180ms]"
+          style={{ transform: editing ? "rotate(90deg)" : "none" }}
+        >
+          ›
+        </span>
+      </button>
 
-        <div className="flex shrink-0 items-center gap-1">
+      {editing ? (
+        <div className="mt-3 flex flex-wrap gap-2">
           {task.status === "active" || task.status === "inbox" ? (
             <form action={toggleMustDoToday}>
               <input type="hidden" name="id" value={task.id} />
@@ -112,7 +145,6 @@ export function TaskRow({
               <Button
                 type="submit"
                 variant={task.mustDoToday ? "danger" : "quiet"}
-                className="px-2 py-1 text-xs"
                 title={
                   task.mustDoToday
                     ? "Remove the must-do-today flag"
@@ -124,37 +156,29 @@ export function TaskRow({
             </form>
           ) : null}
           {task.status === "inbox" ? (
-            <StatusButton id={task.id} status="active" variant="solid">
+            <StatusButton id={task.id} status="active" variant="primary">
               Confirm
             </StatusButton>
           ) : null}
           {task.status === "active" ? (
-            <StatusButton id={task.id} status="done">
+            <StatusButton id={task.id} status="done" variant="quiet">
               Done
             </StatusButton>
           ) : null}
           {task.status !== "dropped" ? (
-            <StatusButton id={task.id} status="dropped">
+            <StatusButton id={task.id} status="dropped" variant="danger">
               Drop
             </StatusButton>
           ) : (
-            <StatusButton id={task.id} status="active">
+            <StatusButton id={task.id} status="active" variant="quiet">
               Restore
             </StatusButton>
           )}
-          <Button
-            type="button"
-            variant="quiet"
-            className="px-2 py-1 text-xs"
-            onClick={toggle}
-          >
-            {editing ? "Close" : "Edit"}
-          </Button>
         </div>
-      </div>
+      ) : null}
 
       {editing ? (
-        <form onSubmit={onSubmit} className="mt-2 flex flex-wrap gap-3 border-t border-rule pt-3">
+        <form onSubmit={onSubmit} className="mt-3 flex flex-wrap gap-3 border-t border-line pt-3">
           <input type="hidden" name="id" value={task.id} />
           <div className="w-full">
             <Labeled label="Title">
@@ -226,7 +250,7 @@ export function TaskRow({
           </div>
 
           {errors.length > 0 ? (
-            <ul role="alert" className="w-full list-disc pl-5 text-xs text-signal">
+            <ul role="alert" className="w-full list-disc pl-5 text-xs font-semibold text-warn">
               {errors.map((e) => (
                 <li key={e}>{e}</li>
               ))}
@@ -241,7 +265,7 @@ export function TaskRow({
             <button
               type="button"
               onClick={del}
-              className="text-xs text-signal underline underline-offset-2"
+              className="text-xs font-bold text-warn underline underline-offset-2"
             >
               Delete permanently
             </button>

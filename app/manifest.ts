@@ -19,8 +19,8 @@ export default function manifest(): MetadataRoute.Manifest {
     // Both --color-paper. The app is a light surface, so the installed
     // status bar should be paper too — matching the <meta name="theme-color">
     // in the root layout rather than contradicting it.
-    background_color: "#f7f7f4",
-    theme_color: "#f7f7f4",
+    background_color: "#fdf8f0",
+    theme_color: "#fdf8f0",
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },

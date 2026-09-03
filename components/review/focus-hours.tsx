@@ -59,13 +59,13 @@ export function FocusHours({ rows }: { rows: FocusRow[] }) {
         const effective = r.manualScore ?? r.score;
         const preferred = effective != null && effective >= FOCUS_PREFER_THRESHOLD;
         return (
-          <li key={r.hour} className="border-b border-rule py-1.5 last:border-b-0">
+          <li key={r.hour} className="border-b border-line py-1.5 last:border-b-0">
             <div className="flex items-center gap-3">
               <span className="tabular w-12 shrink-0 text-xs text-ink-muted">
                 {hm(r.hour)}
               </span>
 
-              <div className="h-2 min-w-0 flex-1 border border-rule bg-paper" style={{ borderRadius: "var(--radius)" }}>
+              <div className="h-2 min-w-0 flex-1 border border-line bg-paper" style={{ borderRadius: "var(--radius-card)" }}>
                 <div
                   className="h-full"
                   style={{
@@ -106,10 +106,10 @@ export function FocusHours({ rows }: { rows: FocusRow[] }) {
                     disabled={pending}
                     onClick={() => set(r.hour, v)}
                     className={cn(
-                      "border border-rule px-2 py-1 text-[11px] disabled:opacity-50",
+                      "border border-line px-2 py-1 text-[11px] disabled:opacity-50",
                       r.manualScore === v ? "bg-ink text-paper" : "bg-surface text-ink-muted hover:text-ink",
                     )}
-                    style={{ borderRadius: "var(--radius)" }}
+                    style={{ borderRadius: "var(--radius-card)" }}
                   >
                     {v === 0 ? "never" : v === 0.3 ? "poor" : v === 0.6 ? "ok" : "good"}
                   </button>

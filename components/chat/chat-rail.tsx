@@ -1,8 +1,22 @@
 "use client";
 
+/**
+ * The assistant transcript.
+ *
+ * Was a floating panel that opened itself from a corner button and remembered
+ * its own open/closed state in localStorage. It is now the body of a sheet, so
+ * open/closed belongs to whatever mounted the sheet — this component only
+ * renders the conversation and the composer.
+ *
+ * Message bubbles follow the Goals treatment: Cadence in white with a square
+ * bottom-left corner, you in tint with a square bottom-right corner.
+ */
+
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
+import { describeThrown } from "@/lib/thrown";
+import { Button } from "@/components/ui/controls";
 import {
   sendChatMessage,
   confirmChatAction,
@@ -12,11 +26,8 @@ import {
 
 type Msg = ChatMsg & { id: string };
 
-const OPEN_KEY = "cadence.chat.open";
-
-export function ChatRail({ initial }: { initial: ChatMsg[] }) {
+export function ChatPanel({ initial }: { initial: ChatMsg[] }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>(
     initial.map((m, i) => ({ ...m, id: `init-${i}` })),
   );
@@ -26,28 +37,8 @@ export function ChatRail({ initial }: { initial: ChatMsg[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // client-only: restore the last open/closed state after mount
-    const restore = () => {
-      try {
-        setOpen(localStorage.getItem(OPEN_KEY) === "1");
-      } catch {
-        /* ignore */
-      }
-    };
-    restore();
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(OPEN_KEY, open ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-  }, [open]);
-
-  useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages, open]);
+  }, [messages]);
 
   function push(m: Omit<Msg, "id">) {
     setMessages((prev) => [...prev, { ...m, id: crypto.randomUUID() }]);
@@ -60,7 +51,13 @@ export function ChatRail({ initial }: { initial: ChatMsg[] }) {
     setInput("");
     push({ role: "user", content: text, createdAt: new Date().toISOString(), pending: null });
     start(async () => {
-      const res = await sendChatMessage(text);
+      let res;
+      try {
+        res = await sendChatMessage(text);
+      } catch (e) {
+        setError(describeThrown(e));
+        return;
+      }
       if (!res.ok) {
         setError(res.error);
         return;
@@ -71,13 +68,16 @@ export function ChatRail({ initial }: { initial: ChatMsg[] }) {
 
   function resolve(accept: boolean, action: NonNullable<ChatMsg["pending"]>, msgId: string) {
     start(async () => {
-      const res = accept
-        ? await confirmChatAction({ kind: action.kind, params: action.params })
-        : { ok: true as const, note: (await dismissChatAction()).note, changed: false };
-      // clear the pending card on that message
-      setMessages((prev) =>
-        prev.map((m) => (m.id === msgId ? { ...m, pending: null } : m)),
-      );
+      let res;
+      try {
+        res = accept
+          ? await confirmChatAction({ kind: action.kind, params: action.params })
+          : { ok: true as const, note: (await dismissChatAction()).note, changed: false };
+      } catch (e) {
+        setError(describeThrown(e));
+        return;
+      }
+      setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, pending: null } : m)));
       const note = "note" in res ? res.note : "error" in res ? res.error : "Done.";
       push({ role: "assistant", content: note, createdAt: new Date().toISOString(), pending: null });
       if (accept && "changed" in res && res.changed) router.refresh();
@@ -85,123 +85,111 @@ export function ChatRail({ initial }: { initial: ChatMsg[] }) {
   }
 
   return (
-    <div className="fixed right-3 bottom-3 z-50 flex flex-col items-end sm:right-4 sm:bottom-4">
-      {open ? (
-        <div
-          className="flex h-[70vh] max-h-[560px] w-[min(92vw,380px)] flex-col border border-rule bg-surface"
-          style={{ borderRadius: "var(--radius)" }}
-        >
-          <div className="flex items-center justify-between border-b border-rule px-3 py-2">
-            <span className="font-mono text-xs tracking-tight text-ink">Assistant</span>
-            <button
-              onClick={() => setOpen(false)}
-              className="text-xs text-ink-muted hover:text-ink"
-              aria-label="Close assistant"
-            >
-              Close
-            </button>
-          </div>
+    <div className="flex h-full min-h-0 flex-col">
+      <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-3">
+        {messages.length === 0 ? (
+          <p className="text-[13.5px] leading-relaxed font-medium text-ink-faint">
+            Ask for anything you could tap — &ldquo;add a task to call the mill
+            tomorrow&rdquo;, &ldquo;what did I log this week&rdquo;, &ldquo;plan my
+            day&rdquo;.
+          </p>
+        ) : null}
 
-          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
-            {messages.length === 0 ? (
-              <p className="text-xs text-ink-muted">
-                Ask for anything you could click — “add a task to call the mill
-                tomorrow”, “what did I log this week”, “plan my day”.
+        {messages.map((m) => {
+          const mine = m.role === "user";
+          return (
+            <div key={m.id} className={cn(mine ? "ml-10" : "mr-10")}>
+              <p
+                className={cn(
+                  "mb-1 text-[10px] font-extrabold tracking-[0.1em] uppercase",
+                  mine ? "text-right text-ink-faint" : "text-primary",
+                )}
+              >
+                {mine ? "You" : "Cadence"}
               </p>
-            ) : null}
-            {messages.map((m) => (
-              <div key={m.id} className={cn("text-sm", m.role === "user" ? "text-ink" : "text-ink-muted")}>
-                <span className="mr-1 font-mono text-[10px] tracking-wide text-ink-muted uppercase">
-                  {m.role === "user" ? "you" : "cadence"}
-                </span>
-                <span className="whitespace-pre-wrap">{m.content}</span>
-
-                {m.pending ? (
-                  <div
-                    className="mt-2 border border-caution/60 bg-paper p-2"
-                    style={{ borderRadius: "var(--radius)" }}
-                  >
-                    <p className="text-xs text-ink">
-                      {m.pending.kind === "drop_block" ? (
-                        <>
-                          Drop{" "}
-                          <span className="font-medium">
-                            &ldquo;{String(m.pending.params.title ?? "this block")}&rdquo;
-                          </span>{" "}
-                          from the plan?
-                        </>
-                      ) : (
-                        <>
-                          Run <span className="font-medium">{m.pending.kind}</span>?
-                          {m.pending.kind === "rebalance" && m.pending.params.energy
-                            ? ` (energy: ${String(m.pending.params.energy)})`
-                            : ""}
-                        </>
-                      )}
-                    </p>
-                    <div className="mt-2 flex gap-2">
-                      <button
-                        disabled={pending}
-                        onClick={() => resolve(true, m.pending!, m.id)}
-                        className="bg-ink px-2.5 py-1 text-xs font-medium text-paper disabled:opacity-60"
-                        style={{ borderRadius: "var(--radius)" }}
-                      >
-                        Confirm
-                      </button>
-                      <button
-                        disabled={pending}
-                        onClick={() => resolve(false, m.pending!, m.id)}
-                        className="border border-rule px-2.5 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-60"
-                        style={{ borderRadius: "var(--radius)" }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
+              <div
+                className={cn(
+                  "px-3.5 py-2.5 text-[13.5px] leading-relaxed font-medium whitespace-pre-wrap",
+                  mine ? "bg-tint text-ink" : "bg-surface text-ink-muted shadow-card",
+                )}
+                style={{
+                  borderRadius: "16px",
+                  [mine ? "borderBottomRightRadius" : "borderBottomLeftRadius"]: "6px",
+                }}
+              >
+                {m.content}
               </div>
-            ))}
-            {pending ? <p className="text-xs text-ink-muted">…</p> : null}
-            {error ? (
-              <p role="alert" className="text-xs text-signal">
-                {error}
-              </p>
-            ) : null}
-          </div>
 
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              send();
-            }}
-            className="flex gap-2 border-t border-rule p-2"
-          >
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Type a request…"
-              className="min-w-0 flex-1 border border-rule bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-ink"
-              style={{ borderRadius: "var(--radius)" }}
-            />
-            <button
-              type="submit"
-              disabled={pending || !input.trim()}
-              className="bg-ink px-3 py-1.5 text-sm font-medium text-paper disabled:opacity-60"
-              style={{ borderRadius: "var(--radius)" }}
-            >
-              Send
-            </button>
-          </form>
-        </div>
-      ) : (
-        <button
-          onClick={() => setOpen(true)}
-          className="border border-rule bg-surface px-3 py-2 font-mono text-xs tracking-tight text-ink shadow-none hover:border-ink"
-          style={{ borderRadius: "var(--radius)" }}
-        >
-          Assistant
-        </button>
-      )}
+              {m.pending ? (
+                <div className="mt-2 rounded-2xl border border-warn-line bg-warn-tint p-3">
+                  <p className="text-[13px] font-semibold text-ink">
+                    {m.pending.kind === "drop_block" ? (
+                      <>
+                        Drop &ldquo;{String(m.pending.params.title ?? "this block")}&rdquo; from
+                        the plan?
+                      </>
+                    ) : (
+                      <>
+                        Run {m.pending.kind}?
+                        {m.pending.kind === "rebalance" && m.pending.params.energy
+                          ? ` (energy: ${String(m.pending.params.energy)})`
+                          : ""}
+                      </>
+                    )}
+                  </p>
+                  <div className="mt-2.5 flex gap-2">
+                    <Button
+                      variant="dark"
+                      disabled={pending}
+                      onClick={() => resolve(true, m.pending!, m.id)}
+                      className="px-4 text-[13px]"
+                    >
+                      Confirm
+                    </Button>
+                    <Button
+                      variant="quiet"
+                      disabled={pending}
+                      onClick={() => resolve(false, m.pending!, m.id)}
+                      className="px-4 text-[13px]"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+
+        {pending ? (
+          <p className="text-[12px] font-semibold text-ink-faint">Thinking…</p>
+        ) : null}
+        {error ? (
+          <p role="alert" className="text-[13px] font-semibold text-warn">
+            {error}
+          </p>
+        ) : null}
+      </div>
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          send();
+        }}
+        className="flex shrink-0 gap-2 px-5 pt-2"
+        style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" }}
+      >
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Type a request…"
+          aria-label="Message Cadence"
+          className="min-w-0 flex-1 rounded-full bg-tint px-4 py-3 text-[14px] font-medium text-ink placeholder:text-ink-faint outline-none focus:bg-surface focus:ring-2 focus:ring-primary/40"
+        />
+        <Button type="submit" disabled={pending || !input.trim()} className="px-5">
+          Send
+        </Button>
+      </form>
     </div>
   );
 }

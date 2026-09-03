@@ -118,8 +118,7 @@ export function BrainDump({ buckets }: { buckets: { id: string; name: string }[]
 
   return (
     <div
-      className="border border-rule bg-surface p-3"
-      style={{ borderRadius: "var(--radius)" }}
+      className="rounded-[18px] bg-surface p-3.5 shadow-card"
     >
       <label className="flex flex-col gap-1">
         <span className="text-xs text-ink-muted">Brain dump</span>
@@ -140,17 +139,17 @@ export function BrainDump({ buckets }: { buckets: { id: string; name: string }[]
             Clear
           </Button>
         ) : null}
-        {note ? <span className="text-xs text-settled">{note}</span> : null}
+        {note ? <span className="text-xs font-semibold text-primary">{note}</span> : null}
         {error ? (
-          <span role="alert" className="text-xs text-signal">
+          <span role="alert" className="text-xs text-warn">
             {error}
           </span>
         ) : null}
       </div>
 
       {clarifications.length > 0 ? (
-        <div className="mt-3 border-t border-rule pt-3">
-          <p className="judgment text-sm text-ink">Before I can capture that, a few things:</p>
+        <div className="mt-3 border-t border-line pt-3">
+          <p className="text-[14px] font-bold text-ink">Before I can capture that, a few things:</p>
           <ul className="mt-1 list-disc pl-5 text-sm text-ink-muted">
             {clarifications.map((q) => (
               <li key={q}>{q}</li>
@@ -174,7 +173,7 @@ export function BrainDump({ buckets }: { buckets: { id: string; name: string }[]
       ) : null}
 
       {drafts && drafts.length > 0 ? (
-        <div className="mt-3 border-t border-rule pt-3">
+        <div className="mt-3 border-t border-line pt-3">
           <p className="mb-1 text-xs font-medium tracking-wide text-ink-muted uppercase">
             {drafts.length} parsed — edit, then add
           </p>
@@ -183,7 +182,7 @@ export function BrainDump({ buckets }: { buckets: { id: string; name: string }[]
               <li
                 key={i}
                 className={cn(
-                  "flex flex-wrap items-center gap-2 border-b border-rule pb-2 last:border-b-0",
+                  "flex flex-wrap items-center gap-2 border-b border-line pb-2 last:border-b-0",
                   !d.include && "opacity-50",
                 )}
               >

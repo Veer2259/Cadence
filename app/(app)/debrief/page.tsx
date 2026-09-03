@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { formatIst, istMinutesOfDay } from "@/lib/time";
+import { desc, isNotNull } from "drizzle-orm";
+import { db } from "@/db";
+import { plans } from "@/db/schema";
+import { formatIst, istMinutesOfDay, istToday } from "@/lib/time";
+import { streakEndingYesterday } from "@/lib/streak";
 import { getPlanToDebrief } from "@/lib/debrief";
 import { DebriefForm, type DebriefBlock } from "@/components/debrief/debrief-form";
 
@@ -23,11 +27,13 @@ export default async function DebriefPage({
 
   if (!target) {
     return (
-      <section>
-        <h1 className="font-mono text-lg tracking-tight text-ink">Debrief</h1>
-        <p className="judgment mt-2 text-sm text-ink-muted">
+      <section className="animate-rise-in">
+        <h1 className="text-[30px] leading-none font-extrabold tracking-[-0.03em] text-ink">
+          Debrief
+        </h1>
+        <p className="mt-2 rounded-[18px] bg-surface px-4 py-4 text-[13.5px] leading-[1.5] font-medium text-ink-muted shadow-card">
           Nothing to close out. Commit a plan on{" "}
-          <Link href="/today" className="text-ink underline underline-offset-2">
+          <Link href="/today" className="font-bold text-primary underline underline-offset-2">
             Today
           </Link>{" "}
           first, or this day has already been debriefed.
@@ -53,5 +59,22 @@ export default async function DebriefPage({
       loggedActualMin: b.actualMin,
     }));
 
-  return <DebriefForm planId={target.plan.id} dateLabel={dateLabel} blocks={blocks} />;
+  // The reward counts TODAY, unlike the streak card — at the moment of closing,
+  // the run the person just extended is the run including the day they closed.
+  const closed = await db
+    .select({ date: plans.date })
+    .from(plans)
+    .where(isNotNull(plans.debriefedAt))
+    .orderBy(desc(plans.date));
+  const streakAfter =
+    streakEndingYesterday(closed.map((r) => r.date), istToday()) + 1;
+
+  return (
+    <DebriefForm
+      planId={target.plan.id}
+      dateLabel={dateLabel}
+      blocks={blocks}
+      streakAfter={streakAfter}
+    />
+  );
 }

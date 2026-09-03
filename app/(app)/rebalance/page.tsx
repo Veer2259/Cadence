@@ -25,12 +25,14 @@ export default async function RebalancePage() {
 
   if (!live || live.plan.debriefedAt) {
     return (
-      <section>
-        <h1 className="font-mono text-lg tracking-tight text-ink">Rebalance</h1>
-        <p className="judgment mt-2 text-sm text-ink-muted">
+      <section className="animate-rise-in">
+        <h1 className="text-[30px] leading-none font-extrabold tracking-[-0.03em] text-ink">
+          Rebalance
+        </h1>
+        <p className="mt-2 rounded-[18px] bg-surface px-4 py-4 text-[13.5px] leading-[1.5] font-medium text-ink-muted shadow-card">
           Rebalance replans a committed day mid-way through. There is no committed
           plan open right now — commit one on{" "}
-          <Link href="/today" className="text-ink underline underline-offset-2">
+          <Link href="/today" className="font-bold text-primary underline underline-offset-2">
             Today
           </Link>
           .
@@ -47,5 +49,23 @@ export default async function RebalancePage() {
       status: b.status,
     }));
 
-  return <RebalanceForm remaining={remaining} />;
+  const lockedCount = live.blocks.filter(
+    (b) => b.status === "done" || b.status === "partial",
+  ).length;
+
+  // How much of the working day is actually left. The last block's end is the
+  // honest edge of the day: replanning cannot place work past it.
+  const lastEnd = live.blocks.reduce(
+    (n, b) => Math.max(n, istMinutesOfDay(b.endAt)),
+    0,
+  );
+  const leftMin = Math.max(0, lastEnd - istMinutesOfDay(new Date()));
+
+  return (
+    <RebalanceForm
+      remaining={remaining}
+      leftMin={leftMin}
+      lockedCount={lockedCount}
+    />
+  );
 }

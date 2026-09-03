@@ -1,6 +1,8 @@
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { buckets as bucketsTable } from "@/db/schema";
 import { requireAuth } from "@/lib/auth";
-import { AppNav } from "@/components/app-nav";
-import { ChatRail } from "@/components/chat/chat-rail";
+import { BottomChrome } from "@/components/chrome/bottom-chrome";
 import { loadChatHistory } from "@/lib/ai/modes/chat";
 
 
@@ -8,8 +10,9 @@ import { loadChatHistory } from "@/lib/ai/modes/chat";
  * Server Actions inherit maxDuration from the PAGE segment they are invoked
  * from, not from the file they live in (Next.js route-segment config). The chat rail lives in THIS layout, so a compose or
  * rebalance confirmed from the assistant can fire on any page in the group —
- * the ceiling has to be here, not only on /today.
- * 
+ * the ceiling has to be here, not only on /today. The capture sheet is mounted
+ * here too, for the same reason.
+ *
  * 300s is the Fluid compute ceiling on Vercel's Hobby plan. It is a ceiling,
  * not a reservation — a fast call still costs only what it uses.
  */
@@ -20,18 +23,33 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   await requireAuth();
-  const history = await loadChatHistory();
+  const [history, buckets] = await Promise.all([
+    loadChatHistory(),
+    db
+      .select({ id: bucketsTable.id, name: bucketsTable.name })
+      .from(bucketsTable)
+      .where(eq(bucketsTable.active, true))
+      .orderBy(bucketsTable.name),
+  ]);
 
   return (
     <div className="flex min-h-full flex-col">
-      <AppNav />
       {/* isolate: page-level z-indexes (the ribbon's) stay contained in their
-          own stacking context, below the header's z-40 */}
-      <main className="isolate mx-auto w-full max-w-3xl flex-1 px-4 py-6">
+          own stacking context, below the chrome */}
+      {/* pb clears the fixed bottom chrome: 34px handle + 56px tab track +
+          26px home-indicator gap, plus a little air. */}
+      <main
+        className="isolate mx-auto w-full max-w-3xl flex-1 px-5"
+        style={{
+          paddingTop: "46px",
+          paddingBottom: "calc(132px + env(safe-area-inset-bottom, 0px))",
+        }}
+      >
         {children}
       </main>
-      <ChatRail
-        initial={history
+      <BottomChrome
+        buckets={buckets}
+        history={history
           .filter((m) => m.role === "user" || m.role === "assistant")
           .map((m) => ({
             role: m.role as "user" | "assistant",
