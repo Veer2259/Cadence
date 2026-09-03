@@ -73,7 +73,7 @@ export function AddCommitment({ date }: { date?: string }) {
         Cancel
       </button>
       {errors.length ? (
-        <ul role="alert" className="w-full list-disc pl-5 text-xs text-signal">
+        <ul role="alert" className="w-full list-disc pl-5 text-xs text-warn">
           {errors.map((e) => (
             <li key={e}>{e}</li>
           ))}

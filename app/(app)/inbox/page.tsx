@@ -80,24 +80,32 @@ export default async function InboxPage({
   const bucketOpts = allBuckets;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="animate-rise-in flex flex-col gap-3">
       <div>
-        <h1 className="font-mono text-lg tracking-tight text-ink">Inbox</h1>
-        <p className="judgment mt-1 text-sm text-ink-muted">
-          Everything on your mind. Confirm what is real; the planner only sees
-          active tasks.
+        <h1 className="text-[30px] leading-none font-extrabold tracking-[-0.03em] text-ink">
+          Inbox
+        </h1>
+        <p className="mt-1.5 text-[13.5px] leading-[1.5] font-medium text-ink-muted">
+          Everything not on a day yet. Confirm what&rsquo;s real, drop what
+          isn&rsquo;t.
         </p>
       </div>
 
+      {/* The capture SHEET lives on the + in the tab bar. This is the same
+          brain dump inline, for when you are already on this screen. */}
       <BrainDump buckets={bucketOpts} />
       <AddTaskForm buckets={bucketOpts} />
 
+      {allBuckets.length > 0 ? (
+        <InboxControls buckets={allBuckets} bucket={bucketFilter} sort={sort} />
+      ) : null}
+
       {waiting.length > 0 ? (
-        <section>
-          <h2 className="mb-1 text-xs font-medium tracking-wide text-ink-muted uppercase">
+        <section className="flex flex-col gap-2.5">
+          <h2 className="text-[11px] font-extrabold tracking-[0.12em] text-ink-soft uppercase">
             Waiting for review · {waiting.length}
           </h2>
-          <ul className="border-t border-rule">
+          <ul className="flex flex-col gap-2.5">
             {waiting.map((t) => (
               <TaskRow key={t.id} task={t} buckets={bucketOpts} targets={allTargets} />
             ))}
@@ -105,26 +113,21 @@ export default async function InboxPage({
         </section>
       ) : null}
 
-      <section>
-        <div className="mb-1 flex items-center justify-between gap-3">
-          <h2 className="text-xs font-medium tracking-wide text-ink-muted uppercase">
-            Active · {active.length}
-          </h2>
-          {allBuckets.length > 0 ? (
-            <InboxControls buckets={allBuckets} bucket={bucketFilter} sort={sort} />
-          ) : null}
-        </div>
+      <section className="flex flex-col gap-2.5">
+        <h2 className="text-[11px] font-extrabold tracking-[0.12em] text-ink-soft uppercase">
+          Active · {active.length}
+        </h2>
 
         {active.length > 0 ? (
-          <ul className="border-t border-rule">
+          <ul className="flex flex-col gap-2.5">
             {active.map((t) => (
               <TaskRow key={t.id} task={t} buckets={bucketOpts} targets={allTargets} />
             ))}
           </ul>
         ) : (
-          <p className="border-t border-rule py-6 text-sm text-ink-muted">
+          <p className="rounded-[18px] bg-surface px-4 py-6 text-[13.5px] font-medium text-ink-muted shadow-card">
             {rows.length === 0 && !bucketFilter
-              ? "Nothing here yet. Add your first task above."
+              ? "Nothing waiting. Type a brain dump to get started."
               : "Nothing active with this filter."}
           </p>
         )}

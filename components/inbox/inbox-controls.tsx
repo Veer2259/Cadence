@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Select } from "@/components/ui/controls";
+import { Chip } from "@/components/ui/controls";
 
 export function InboxControls({
   buckets,
@@ -25,28 +25,26 @@ export function InboxControls({
   }
 
   return (
-    <div className="flex items-center gap-2 text-xs text-ink-muted">
-      <label className="flex items-center gap-1.5">
-        bucket
-        <Select
-          value={bucket ?? ""}
-          onChange={(e) => apply({ bucket: e.target.value || null })}
+    <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1">
+      <Chip selected={!bucket} onClick={() => apply({ bucket: null })}>
+        All
+      </Chip>
+      {buckets.map((b) => (
+        <Chip
+          key={b.id}
+          selected={bucket === b.id}
+          onClick={() => apply({ bucket: b.id })}
         >
-          <option value="">all</option>
-          {buckets.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </Select>
-      </label>
-      <label className="flex items-center gap-1.5">
-        sort
-        <Select value={sort} onChange={(e) => apply({ sort: e.target.value })}>
-          <option value="due">by due date</option>
-          <option value="created">newest first</option>
-        </Select>
-      </label>
+          {b.name}
+        </Chip>
+      ))}
+      <span aria-hidden className="w-px shrink-0" />
+      <Chip
+        selected={sort === "created"}
+        onClick={() => apply({ sort: sort === "created" ? "due" : "created" })}
+      >
+        {sort === "created" ? "Newest first" : "By due date"}
+      </Chip>
     </div>
   );
 }

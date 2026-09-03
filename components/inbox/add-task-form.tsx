@@ -20,8 +20,7 @@ export function AddTaskForm({ buckets }: { buckets: { id: string; name: string }
     <form
       ref={formRef}
       action={formAction}
-      className="border border-rule bg-surface p-3"
-      style={{ borderRadius: "var(--radius)" }}
+      className="rounded-[18px] bg-surface p-3.5 shadow-card"
     >
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-[14rem] flex-1">
@@ -54,7 +53,7 @@ export function AddTaskForm({ buckets }: { buckets: { id: string; name: string }
       </div>
 
       {open ? (
-        <div className="mt-3 flex flex-wrap gap-3 border-t border-rule pt-3">
+        <div className="mt-3 flex flex-wrap gap-3 border-t border-line pt-3">
           <Labeled label="Bucket">
             <Select name="bucketId" defaultValue="">
               <option value="">— none —</option>
@@ -92,7 +91,7 @@ export function AddTaskForm({ buckets }: { buckets: { id: string; name: string }
       ) : null}
 
       {state.errors.length > 0 ? (
-        <ul role="alert" className="mt-2 list-disc pl-5 text-xs text-signal">
+        <ul role="alert" className="mt-2 list-disc pl-5 text-xs text-warn">
           {state.errors.map((e) => (
             <li key={e}>{e}</li>
           ))}

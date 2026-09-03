@@ -28,12 +28,12 @@ export function WeekNote({ hasDeadlines }: { hasDeadlines: boolean }) {
     return <p className="text-sm text-ink-muted">Reading the week…</p>;
   }
   if (state.phase === "error") {
-    return <p className="text-sm text-signal">{state.msg}</p>;
+    return <p className="text-[13px] font-semibold text-warn">{state.msg}</p>;
   }
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="judgment border-l-2 border-rule pl-3 text-sm text-ink">
+      <p className="rounded-[18px] bg-surface px-4 py-3 text-[14px] leading-[1.5] font-medium text-ink-muted shadow-card">
         {state.data.weekNote}
       </p>
       {state.data.lines.length ? (
