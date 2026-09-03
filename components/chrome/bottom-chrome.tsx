@@ -31,7 +31,10 @@ export function BottomChrome({
 
   return (
     <>
-      <div className="sticky bottom-0 z-40 shrink-0 bg-paper">
+      {/* Fixed, not sticky: a sticky footer still occupies its flow position
+          and rides up over the content above it, which clipped the last control
+          on every screen. Fixed + matching padding on <main> is predictable. */}
+      <div className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-3xl bg-paper">
         <AssistantHandle onOpen={() => setSheet("chat")} unread={0} />
         <AppNav onCapture={() => setSheet("capture")} />
       </div>

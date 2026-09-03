@@ -36,7 +36,15 @@ export default async function AppLayout({
     <div className="flex min-h-full flex-col">
       {/* isolate: page-level z-indexes (the ribbon's) stay contained in their
           own stacking context, below the chrome */}
-      <main className="isolate mx-auto w-full max-w-3xl flex-1 px-5 pb-6" style={{ paddingTop: "46px" }}>
+      {/* pb clears the fixed bottom chrome: 34px handle + 56px tab track +
+          26px home-indicator gap, plus a little air. */}
+      <main
+        className="isolate mx-auto w-full max-w-3xl flex-1 px-5"
+        style={{
+          paddingTop: "46px",
+          paddingBottom: "calc(132px + env(safe-area-inset-bottom, 0px))",
+        }}
+      >
         {children}
       </main>
       <BottomChrome

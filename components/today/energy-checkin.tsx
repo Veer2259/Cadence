@@ -40,46 +40,36 @@ export function EnergyCheckin({
     });
   }
 
-  const current = justSaved ?? null;
+  const current = justSaved ?? latest?.level ?? null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs text-ink-muted">Energy now</span>
-      <div className="flex" role="group" aria-label="Record your energy right now">
-        {OPTIONS.map((o, i) => (
-          <button
-            key={o.key}
-            type="button"
-            disabled={pending}
-            aria-pressed={current === o.key}
-            onClick={() => pick(o.key)}
-            className={cn(
-              "border border-rule px-2 py-1 text-xs disabled:opacity-60",
-              i === 0 ? "" : "-ml-px",
-              current === o.key
-                ? "bg-ink text-paper"
-                : "bg-surface text-ink-muted hover:text-ink",
-            )}
-            style={{
-              borderTopLeftRadius: i === 0 ? "var(--radius)" : 0,
-              borderBottomLeftRadius: i === 0 ? "var(--radius)" : 0,
-              borderTopRightRadius: i === OPTIONS.length - 1 ? "var(--radius)" : 0,
-              borderBottomRightRadius: i === OPTIONS.length - 1 ? "var(--radius)" : 0,
-            }}
-          >
-            {o.label}
-          </button>
-        ))}
+    <div className="flex items-center gap-2.5">
+      <span className="text-[12px] font-bold text-ink-soft">Feeling</span>
+      <div className="flex gap-2" role="group" aria-label="Record your energy right now">
+        {OPTIONS.map((o) => {
+          const active = current === o.key;
+          return (
+            <button
+              key={o.key}
+              type="button"
+              disabled={pending}
+              aria-pressed={active}
+              onClick={() => pick(o.key)}
+              className={cn(
+                "min-h-[34px] rounded-full px-3.5 text-[12.5px] font-bold capitalize disabled:opacity-60",
+                active ? "bg-ink text-paper" : "bg-tint text-ink-soft",
+              )}
+            >
+              {o.label}
+            </button>
+          );
+        })}
       </div>
-      {justSaved ? (
-        <span className="text-xs text-settled">logged</span>
-      ) : latest ? (
-        <span className="text-xs text-ink-muted">
-          last: {latest.level} at {hm(latest.minuteOfDay)}
+      {latest && !justSaved ? (
+        <span className="tabular text-[11px] font-semibold text-ink-faint">
+          {hm(latest.minuteOfDay)}
         </span>
-      ) : (
-        <span className="text-xs text-ink-muted">not logged today</span>
-      )}
+      ) : null}
     </div>
   );
 }
