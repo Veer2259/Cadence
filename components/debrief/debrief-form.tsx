@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/controls";
+import { StarMark } from "@/components/more/streak-banner";
 import {
   submitDebriefAction,
   type DebriefActionResult,
@@ -43,10 +44,13 @@ export function DebriefForm({
   planId,
   dateLabel,
   blocks,
+  streakAfter,
 }: {
   planId: string;
   dateLabel: string;
   blocks: DebriefBlock[];
+  /** The run INCLUDING today, for the reward. See the debrief page. */
+  streakAfter: number;
 }) {
   // Seed from whatever was logged live; only the untouched blocks fall back to
   // the "done, as planned" default. Nothing already answered is asked again.
@@ -99,26 +103,56 @@ export function DebriefForm({
   }
 
   if (result?.ok) {
+    const over = result.loggedMin - result.plannedMin;
     return (
-      <div className="flex flex-col gap-4">
-        <h1 className="font-mono text-lg tracking-tight text-ink">Day closed — {dateLabel}</h1>
-        <p className="judgment border-l-2 border-settled pl-3 text-sm text-ink">
-          {result.summary}
-        </p>
-        <p className="tabular text-xs text-ink-muted">
-          {dur(result.loggedMin)} logged of {dur(result.plannedMin)} planned ·{" "}
-          {result.tasksDone} task{result.tasksDone === 1 ? "" : "s"} done ·{" "}
-          {result.carriedOver} carried over ·{" "}
-          {result.calibrationTouched.length} calibration key
-          {result.calibrationTouched.length === 1 ? "" : "s"} updated
-        </p>
-        <div>
-          <Link
-            href="/today"
-            className="inline-block bg-ink px-4 py-2 text-sm font-medium text-paper"
-            style={{ borderRadius: "var(--radius)" }}
-          >
-            Back to today
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-6"
+        style={{ background: "rgba(42,36,25,.42)" }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Day closed"
+      >
+        <div className="animate-pop w-full max-w-sm rounded-[28px] bg-surface p-6 text-center">
+          <div className="relative mx-auto h-[110px] w-[110px]">
+            <svg width="110" height="110" viewBox="0 0 110 110" aria-hidden>
+              <circle
+                cx="55"
+                cy="55"
+                r="48"
+                fill="none"
+                stroke="var(--color-primary)"
+                strokeWidth="9"
+                strokeLinecap="round"
+              />
+            </svg>
+            <span className="absolute inset-0 flex items-center justify-center text-primary">
+              <StarMark size={40} />
+            </span>
+          </div>
+
+          <h1 className="mt-4 text-[24px] font-extrabold tracking-[-0.03em] text-ink">
+            Day closed
+          </h1>
+          <p className="mt-1 text-[15px] font-extrabold text-primary">
+            {streakAfter} day{streakAfter === 1 ? "" : "s"} in a row
+          </p>
+
+          <p className="mt-3 text-[13.5px] leading-[1.5] font-medium text-ink-muted">
+            {dur(result.loggedMin)} logged against {dur(result.plannedMin)} planned
+            {over === 0
+              ? " — exactly as estimated."
+              : over > 0
+                ? ` — ${dur(over)} over.`
+                : ` — ${dur(-over)} under.`}
+          </p>
+          <p className="mt-2 text-[13.5px] leading-[1.5] font-medium text-ink-soft">
+            {result.summary}
+          </p>
+
+          <Link href="/today" className="mt-5 block">
+            <span className="flex min-h-[50px] w-full items-center justify-center rounded-full bg-ink text-sm font-extrabold text-paper">
+              Nice. Onward.
+            </span>
           </Link>
         </div>
       </div>
@@ -138,17 +172,17 @@ export function DebriefForm({
         </p>
       </div>
 
-      <ul className="border-t border-rule">
+      <ul className="flex flex-col gap-2.5">
         {blocks.map((b) => {
           const r = rows[b.id];
           const skipped = r.status === "skipped";
           return (
             <li
               key={b.id}
-              className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-rule py-2"
+              className="flex flex-wrap items-center gap-x-3 gap-y-2.5 rounded-[18px] bg-surface p-3.5 shadow-card"
             >
               <div className="min-w-[9rem] flex-1">
-                <p className={cn("text-sm", skipped ? "text-ink-muted line-through" : "text-ink")}>
+                <p className={cn("text-[14.5px] font-bold", skipped ? "text-ink-ghost line-through" : "text-ink")}>
                   {b.title}
                 </p>
                 <p className="tabular text-xs text-ink-muted">
@@ -157,12 +191,7 @@ export function DebriefForm({
                 </p>
               </div>
 
-              <div
-                className="flex overflow-hidden border border-rule"
-                style={{ borderRadius: "var(--radius)" }}
-                role="group"
-                aria-label={`Status for ${b.title}`}
-              >
+              <div className="flex gap-1.5" role="group" aria-label={`Status for ${b.title}`}>
                 {STATUSES.map((s) => (
                   <button
                     key={s.key}
@@ -170,10 +199,14 @@ export function DebriefForm({
                     aria-pressed={r.status === s.key}
                     onClick={() => setRow(b.id, { status: s.key })}
                     className={cn(
-                      "px-3 py-2 text-xs font-medium",
-                      r.status === s.key
-                        ? "bg-ink text-paper"
-                        : "bg-surface text-ink-muted hover:text-ink",
+                      "min-h-[34px] rounded-full px-3 text-[12px] font-extrabold",
+                      r.status !== s.key
+                        ? "bg-tint text-ink-soft"
+                        : s.key === "done"
+                          ? "bg-primary text-white"
+                          : s.key === "partial"
+                            ? "bg-caution text-white"
+                            : "bg-warn text-white",
                     )}
                   >
                     {s.label}
@@ -191,8 +224,7 @@ export function DebriefForm({
                   type="button"
                   aria-label="5 minutes less"
                   onClick={() => setRow(b.id, { actualMin: Math.max(0, r.actualMin - 5) })}
-                  className="h-9 w-9 border border-rule text-ink-muted hover:text-ink"
-                  style={{ borderRadius: "var(--radius) 0 0 var(--radius)" }}
+                  className="h-[42px] w-[38px] rounded-l-full bg-tint text-ink-soft"
                 >
                   −
                 </button>
@@ -207,15 +239,14 @@ export function DebriefForm({
                       actualMin: Math.max(0, Math.min(1440, Number(e.target.value) || 0)),
                     })
                   }
-                  className="tabular h-9 w-14 border-y border-rule bg-surface text-center text-sm text-ink outline-none focus:border-ink"
+                  className="tabular h-[42px] w-[66px] bg-tint text-center text-sm font-extrabold text-ink outline-none"
                   aria-label={`Actual minutes for ${b.title}`}
                 />
                 <button
                   type="button"
                   aria-label="5 minutes more"
                   onClick={() => setRow(b.id, { actualMin: Math.min(1440, r.actualMin + 5) })}
-                  className="h-9 w-9 border border-rule text-ink-muted hover:text-ink"
-                  style={{ borderRadius: "0 var(--radius) var(--radius) 0" }}
+                  className="h-[42px] w-[38px] rounded-r-full bg-tint text-ink-soft"
                 >
                   +
                 </button>
@@ -226,7 +257,7 @@ export function DebriefForm({
       </ul>
 
       {result && !result.ok ? (
-        <p role="alert" className="text-sm text-signal">
+        <p role="alert" className="text-[13px] font-semibold text-warn">
           {result.error}
         </p>
       ) : null}
