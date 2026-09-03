@@ -8,8 +8,10 @@ export const dynamic = "force-dynamic";
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="border-t border-rule pt-4">
-      <h2 className="mb-2 text-xs font-medium tracking-wide text-ink uppercase">{title}</h2>
+    <section className="rounded-[18px] bg-surface p-4 shadow-card">
+      <h2 className="mb-2 text-[15px] font-extrabold tracking-[-0.02em] text-ink">
+        {title}
+      </h2>
       {children}
     </section>
   );
@@ -23,23 +25,49 @@ export default async function ReviewPage() {
   const latest = r.accuracy.at(-1);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="animate-rise-in flex flex-col gap-2.5">
       <div>
-        <h1 className="font-mono text-lg tracking-tight text-ink">Review</h1>
-        <p className="judgment mt-1 text-sm text-ink-muted">
+        <h1 className="text-[30px] leading-none font-extrabold tracking-[-0.03em] text-ink">
+          Review
+        </h1>
+        <p className="mt-1.5 text-[13.5px] leading-[1.5] font-medium text-ink-muted">
           How the estimates are converging, where the hours actually go.
         </p>
       </div>
 
+      {latest ? (
+        <div className="rounded-[18px] bg-surface p-4 shadow-card">
+          <p className="text-[10px] font-bold tracking-[0.1em] text-ink-soft uppercase">
+            Estimate accuracy
+          </p>
+          <p
+            className="tabular mt-0.5 text-[22px] font-extrabold tracking-[-0.03em]"
+            style={{
+              color:
+                latest.ratio > 1.15 ? "var(--color-caution)" : "var(--color-primary)",
+            }}
+          >
+            {latest.ratio}×
+          </p>
+          <p className="mt-0.5 text-[12.5px] font-semibold text-ink-faint">
+            {latest.ratio > 1.05
+              ? "You run over your estimates."
+              : latest.ratio < 0.95
+                ? "You finish ahead of your estimates."
+                : "Your estimates are landing."}
+          </p>
+        </div>
+      ) : null}
+
       <Panel title={`Estimate accuracy over time${latest ? ` — last ${latest.ratio}×` : ""}`}>
-        <p className="mb-2 text-xs text-ink-muted">
+        <p className="mb-2 text-[12px] font-semibold text-ink-faint">
           actual ÷ estimate per debriefed day. The dashed line is 1.0 — dead-on.
         </p>
         <AccuracyChart data={r.accuracy} />
       </Panel>
 
       <Panel title="Hours per bucket">
-        <p className="mb-2 text-xs text-ink-muted">
+        <p className="mb-2 text-[12px] font-semibold text-ink-faint">
           Dark = last 7 days, light = last 30.
         </p>
         <BucketChart data={r.buckets} />
@@ -49,18 +77,18 @@ export default async function ReviewPage() {
         {history.length ? (
           <ul className="flex flex-col gap-1">
             {history.map((h, i) => (
-              <li key={i} className="flex items-baseline justify-between gap-2 border-b border-rule py-1 text-sm last:border-b-0">
+              <li key={i} className="flex items-baseline justify-between gap-2 border-b border-line py-1.5 text-[13px] last:border-b-0">
                 <span className="min-w-0 flex-1 truncate text-ink">
-                  <span className="tabular mr-2 text-xs text-ink-muted">{h.weekStart}</span>
+                  <span className="tabular mr-2 text-[11px] font-semibold text-ink-faint">{h.weekStart}</span>
                   {h.description}
-                  <span className="ml-1.5 text-xs text-ink-muted">{h.bucket}</span>
+                  <span className="ml-1.5 text-[11px] font-semibold text-ink-faint">{h.bucket}</span>
                 </span>
                 <span
                   className={
                     h.status === "hit"
-                      ? "tabular shrink-0 text-xs text-settled"
+                      ? "tabular shrink-0 text-xs text-primary"
                       : h.status === "missed"
-                        ? "tabular shrink-0 text-xs text-signal"
+                        ? "tabular shrink-0 text-xs text-warn"
                         : "tabular shrink-0 text-xs text-ink-muted"
                   }
                 >
@@ -82,7 +110,7 @@ export default async function ReviewPage() {
         {projections.length ? (
           <ul className="flex flex-col gap-2">
             {projections.map((p) => (
-              <li key={p.bucket} className="border-b border-rule pb-2 last:border-b-0">
+              <li key={p.bucket} className="border-b border-line pb-2 last:border-b-0">
                 <div className="flex items-baseline justify-between gap-2 text-sm">
                   <span className="text-ink">{p.outcome}</span>
                   <span className="tabular shrink-0 text-xs text-ink-muted">
@@ -90,9 +118,9 @@ export default async function ReviewPage() {
                   </span>
                 </div>
                 {p.verdict ? (
-                  <p className="judgment mt-0.5 text-xs text-ink-muted">{p.verdict}</p>
+                  <p className="mt-0.5 text-xs text-ink-muted">{p.verdict}</p>
                 ) : (
-                  <p className="judgment mt-0.5 text-xs text-ink-muted">
+                  <p className="mt-0.5 text-xs text-ink-muted">
                     {p.weeksLeft} week{p.weeksLeft === 1 ? "" : "s"} left. No weekly
                     hour target set, so there is nothing to compare the rate against.
                   </p>
@@ -108,7 +136,7 @@ export default async function ReviewPage() {
       </Panel>
 
       <Panel title="Focus hours — learned from your deep work">
-        <p className="mb-2 text-xs text-ink-muted">
+        <p className="mb-2 text-[12px] font-semibold text-ink-faint">
           Derived from deep-work blocks on debriefed days: how close each landed
           to its estimate, and how often that slot got skipped. Green means the
           planner prefers that hour. Override any hour where the data is plainly
@@ -118,7 +146,7 @@ export default async function ReviewPage() {
       </Panel>
 
       <Panel title="Energy by time of day">
-        <p className="mb-2 text-xs text-ink-muted">
+        <p className="mb-2 text-[12px] font-semibold text-ink-faint">
           Mean of your check-ins, last 30 days. Self-reported, and separate from
           the focus hours above — those are measured from how deep work actually
           went, not from how you felt.
@@ -138,7 +166,7 @@ export default async function ReviewPage() {
             </thead>
             <tbody>
               {r.categories.map((c) => (
-                <tr key={c.category} className="border-t border-rule">
+                <tr key={c.category} className="border-t border-line">
                   <td className="py-1.5">{c.category}</td>
                   <td className="tabular py-1.5">
                     {c.ratio}×
@@ -164,11 +192,11 @@ export default async function ReviewPage() {
 
       <Panel title="Defer leaderboard">
         {r.deferLeaderboard.length ? (
-          <ul className="border-t border-rule">
+          <ul className="border-t border-line">
             {r.deferLeaderboard.map((d, i) => (
               <li
                 key={i}
-                className="flex items-center justify-between gap-3 border-b border-rule py-1.5 last:border-b-0"
+                className="flex items-center justify-between gap-3 border-b border-line py-1.5 last:border-b-0"
               >
                 <span className="truncate text-sm text-ink">
                   {d.title}

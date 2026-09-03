@@ -62,25 +62,7 @@
   --shadow-sheet: 0 -8px 30px rgba(42, 36, 25, 0.16);
 }
 
-/*
-  Retired token names, aliased to their nearest replacement.
-
-  Every screen still refers to these until its own step of the redesign lands.
-  Dropping them in one go would not fail the build — Tailwind v4 simply emits
-  nothing for an unknown utility — it would silently strip the styling from all
-  ten screens at once and leave nothing reviewable between steps. Delete each
-  alias as the last screen using it is migrated.
-*/
-@theme {
-  --color-rule: #efe6d6; /* → line */
-  --color-signal: #d6522a; /* → warn */
-  --color-settled: #0f9d58; /* → primary */
-  --color-sharp: #e8f5ec; /* → primary-tint */
-  --font-mono: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
-  --font-serif: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
-}
-
-/* Legacy inline `style={{ borderRadius: "var(--radius)" }}` call sites. */
+/* A few components still reach for var(--radius) inline. */
 :root {
   --radius: 16px;
 }

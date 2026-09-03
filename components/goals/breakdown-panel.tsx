@@ -158,7 +158,7 @@ export function BreakdownPanel({
       </div>
 
       {/* the dialogue */}
-      <div className="flex flex-col gap-3 border-t border-rule pt-3">
+      <div className="flex flex-col gap-3 border-t border-line pt-3">
         {messages.length === 0 ? (
           <p className="text-sm text-ink-muted">
             Say what you are trying to achieve in this bucket. It will ask about
@@ -167,24 +167,37 @@ export function BreakdownPanel({
             does not match the hours you actually log.
           </p>
         ) : (
-          messages.map((m, i) => (
-            <div key={i} className="text-sm">
-              <span className="mr-1 font-mono text-[10px] tracking-wide text-ink-muted uppercase">
-                {m.role === "user" ? "you" : "cadence"}
-              </span>
-              <span
-                className={
-                  m.role === "user" ? "whitespace-pre-wrap text-ink" : "judgment whitespace-pre-wrap text-ink-muted"
-                }
-              >
-                {m.content}
-              </span>
-            </div>
-          ))
+          messages.map((m, i) => {
+            const mine = m.role === "user";
+            return (
+              <div key={i} className={mine ? "ml-10" : "mr-10"}>
+                <p
+                  className={
+                    "mb-1 text-[10px] font-extrabold tracking-[0.1em] uppercase " +
+                    (mine ? "text-right text-ink-faint" : "text-primary")
+                  }
+                >
+                  {mine ? "You" : "Cadence"}
+                </p>
+                <div
+                  className={
+                    "px-3.5 py-2.5 text-[13.5px] leading-relaxed font-medium whitespace-pre-wrap " +
+                    (mine ? "bg-tint text-ink" : "bg-surface text-ink-muted shadow-card")
+                  }
+                  style={{
+                    borderRadius: "16px",
+                    [mine ? "borderBottomRightRadius" : "borderBottomLeftRadius"]: "6px",
+                  }}
+                >
+                  {m.content}
+                </div>
+              </div>
+            );
+          })
         )}
         {pending ? <p className="text-xs text-ink-muted">Thinking…</p> : null}
         {error ? (
-          <p role="alert" className="text-sm text-signal">
+          <p role="alert" className="text-sm text-warn">
             {error}
           </p>
         ) : null}
@@ -210,13 +223,13 @@ export function BreakdownPanel({
 
       {/* the review list — nothing above this has written anything */}
       {hasProposal ? (
-        <div className="flex flex-col gap-3 border-t border-rule pt-3">
+        <div className="flex flex-col gap-3 border-t border-line pt-3">
           <div>
             <h3 className="text-xs font-medium tracking-wide text-ink uppercase">
               Proposal — review and edit before saving
             </h3>
             {reasoning ? (
-              <p className="judgment mt-1 border-l-2 border-rule pl-3 text-sm text-ink-muted">
+              <p className="mt-1 border-l-2 border-line pl-3 text-sm text-ink-muted">
                 {reasoning}
               </p>
             ) : null}
@@ -299,7 +312,7 @@ export function BreakdownPanel({
             <Button type="button" onClick={accept} disabled={pending || !outcome.trim()}>
               {pending ? "Saving…" : "Save outcome + targets"}
             </Button>
-            {saved ? <span className="text-xs text-settled">{saved}</span> : null}
+            {saved ? <span className="text-xs text-primary">{saved}</span> : null}
           </div>
         </div>
       ) : null}

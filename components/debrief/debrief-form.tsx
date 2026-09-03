@@ -160,10 +160,15 @@ export function DebriefForm({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="animate-rise-in flex flex-col gap-3">
       <div>
-        <h1 className="font-mono text-lg tracking-tight text-ink">Debrief — {dateLabel}</h1>
-        <p className="judgment mt-1 text-sm text-ink-muted">
+        <h1 className="text-[30px] leading-none font-extrabold tracking-[-0.03em] text-ink">
+          How did it go?
+        </h1>
+        <p className="mt-1 text-[12px] font-bold tracking-[0.1em] text-ink-soft uppercase">
+          {dateLabel}
+        </p>
+        <p className="mt-2 text-[13.5px] leading-[1.5] font-medium text-ink-muted">
           {preLogged > 0
             ? remaining > 0
               ? `${preLogged} of ${blocks.length} already logged during the day — change only the remaining ${remaining}, then log the day.`

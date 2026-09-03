@@ -139,7 +139,7 @@ export function BrainDump({ buckets }: { buckets: { id: string; name: string }[]
             Clear
           </Button>
         ) : null}
-        {note ? <span className="text-xs text-settled">{note}</span> : null}
+        {note ? <span className="text-xs font-semibold text-primary">{note}</span> : null}
         {error ? (
           <span role="alert" className="text-xs text-warn">
             {error}

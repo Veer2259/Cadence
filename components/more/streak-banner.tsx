@@ -21,7 +21,7 @@ export function StreakBanner({
       className="flex items-center gap-3 rounded-[18px] px-4 py-3.5"
       style={{ background: "linear-gradient(var(--color-primary), var(--color-primary-deep))" }}
     >
-      <StarMark className="animate-spark shrink-0" size={26} />
+      <StarMark className="animate-spark shrink-0 text-paper" size={26} />
 
       <div className="min-w-0 flex-1">
         <p className="text-sm font-extrabold text-paper">
@@ -53,7 +53,6 @@ export function StarMark({
       aria-hidden
       className={className}
       fill="currentColor"
-      style={{ color: "var(--color-paper)" }}
     >
       <path d="M12 0l1.9 8.2L22 6l-5.3 6L22 18l-8.1-2.2L12 24l-1.9-8.2L2 18l5.3-6L2 6l8.1 2.2z" />
     </svg>

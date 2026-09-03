@@ -64,8 +64,8 @@ export function CadencePicker({ initial }: { initial?: HabitCadence }) {
           {WEEKDAY_KEYS.map((d) => (
             <label
               key={d}
-              className="flex cursor-pointer items-center gap-1 border border-rule px-1.5 py-1 text-xs text-ink-muted"
-              style={{ borderRadius: "var(--radius)" }}
+              className="flex cursor-pointer items-center gap-1 border border-line px-1.5 py-1 text-xs text-ink-muted"
+              style={{ borderRadius: "var(--radius-card)" }}
             >
               <input
                 type="checkbox"
