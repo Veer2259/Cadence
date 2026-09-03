@@ -97,17 +97,25 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-button {
-  font-family: inherit;
-  color: inherit;
-  -webkit-tap-highlight-color: transparent;
-  cursor: pointer;
-}
+/*
+  These MUST stay inside @layer base. Unlayered CSS outranks every layered rule,
+  so `button { color: inherit }` at the top level silently beats `text-paper`
+  and every other text utility on a button — a dark pill with an invisible
+  label, and no warning anywhere.
+*/
+@layer base {
+  button {
+    font-family: inherit;
+    color: inherit;
+    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+  }
 
-input,
-textarea,
-select {
-  font-family: inherit;
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+  }
 }
 
 /*
