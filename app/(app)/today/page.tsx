@@ -131,8 +131,6 @@ export default async function TodayPage({
   const focusRanges = toRanges((await learnedFocusWindows()).windows);
 
   const nowMin = istMinutesOfDay(new Date());
-  const inWindow =
-    realToday && workRanges.some((r) => nowMin >= r.startMin && nowMin <= r.endMin);
 
   const live = await getLivePlan(date);
   const latestEnergy = realToday ? await latestEnergyToday() : null;
@@ -205,7 +203,6 @@ export default async function TodayPage({
             readOnly={isPast}
             isToday={realToday}
             status="none"
-            inWindow={inWindow}
           />
         </div>
       </div>
@@ -387,7 +384,6 @@ export default async function TodayPage({
           planId={live.plan.id}
           debriefed={!!live.plan.debriefedAt}
           isRebalance={!!live.plan.parentPlanId}
-          inWindow={inWindow}
         />
       </div>
 

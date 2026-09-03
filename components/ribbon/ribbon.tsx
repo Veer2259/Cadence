@@ -20,7 +20,7 @@
  * blocks are floored at 30px and are the only ones that read slightly large.
  */
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { blockColor, FIXED_HATCH } from "@/lib/block-color";
@@ -59,6 +59,16 @@ const REASON_PX = 78;
 const RESIZABLE_PX = 40;
 /** Drag / resize snap, in minutes. */
 const SNAP_MIN = 5;
+/** How far the pointer must travel before a press counts as a drag, not a tap. */
+const DRAG_THRESHOLD_PX = 4;
+/**
+ * Touch only: how long a finger must rest on a block before dragging arms.
+ *
+ * Without this the ribbon would have to set `touch-action: none` on every
+ * block, and since blocks cover nearly the full width, the page could no longer
+ * be scrolled by dragging over them. Hold to move, swipe to scroll.
+ */
+const LONG_PRESS_MS = 350;
 /** Shortest a block can be dragged to. */
 const FLOOR_MIN = 5;
 
@@ -86,6 +96,10 @@ type Gesture = {
   moved: boolean;
   curS: number;
   curE: number;
+  /** Dragging is live. Immediate for mouse/pen and for the resize handles;
+   *  for a touch on the body of a block, only after the long press. */
+  armed: boolean;
+  timer: number | null;
 };
 type Draft = { startMin: number; endMin: number };
 
@@ -120,7 +134,35 @@ export function Ribbon({
   const [warnings, setWarnings] = useState<string[]>(initialWarnings);
   const [sheetFor, setSheetFor] = useState<string | null>(null);
   const [saving, startSave] = useTransition();
+  /** The block whose long press has armed, for the lifted visual. */
+  const [armedId, setArmedId] = useState<string | null>(null);
   const gesture = useRef<Gesture | null>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Suppress the browser's own scrolling only while a drag is actually armed.
+   *
+   * This has to be a non-passive listener added by hand: React attaches touch
+   * handlers passively, so preventDefault() from a JSX onTouchMove is ignored.
+   * The alternative is `touch-action: none` in CSS, which would be permanent
+   * and would cost the page its scroll everywhere a block sits.
+   */
+  useEffect(() => {
+    const el = surfaceRef.current;
+    if (!el) return;
+    const onTouchMove = (e: TouchEvent) => {
+      if (gesture.current?.armed) e.preventDefault();
+    };
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => el.removeEventListener("touchmove", onTouchMove);
+  }, []);
+
+  // A gesture abandoned mid-flight must not leave its long-press timer running.
+  useEffect(() => {
+    return () => {
+      if (gesture.current?.timer != null) clearTimeout(gesture.current.timer);
+    };
+  }, []);
 
   const span = Math.max(1, windowEndMin - windowStartMin);
   const height = span * PX_PER_MIN;
@@ -131,31 +173,72 @@ export function Ribbon({
     drafts[b.id] ?? { startMin: b.startMin, endMin: b.endMin };
 
   function onDown(e: React.PointerEvent, b: RibbonBlock) {
-    if (!editable || b.kind === "break" || saving) return;
+    if (!editable || b.kind === "break") return;
     const handle = (e.target as HTMLElement).dataset.handle as DragMode | undefined;
-    if (!handle) return; // a plain press opens the sheet; only handles drag
-    e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
+    const mode: DragMode = handle ?? "move";
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // A pointer that is already gone cannot be captured; the gesture still works.
+    }
     const p = posOf(b);
+
+    // While a previous edit is still saving, a press may still open the block —
+    // it just cannot become a second drag. Refusing the press outright made
+    // blocks feel dead for the second or so after every move.
+    const armNow = !saving && (e.pointerType !== "touch" || !!handle);
+
     gesture.current = {
       id: b.id,
-      mode: handle,
+      mode,
       y0: e.clientY,
       s0: p.startMin,
       e0: p.endMin,
       moved: false,
       curS: p.startMin,
       curE: p.endMin,
+      armed: armNow,
+      timer: null,
     };
-    setActiveId(b.id);
+
+    if (armNow) {
+      setArmedId(b.id);
+    } else if (!saving) {
+      gesture.current.timer = window.setTimeout(() => {
+        const g = gesture.current;
+        if (!g || g.id !== b.id) return;
+        g.armed = true;
+        g.timer = null;
+        setArmedId(b.id);
+      }, LONG_PRESS_MS);
+    }
   }
 
   function onDragMove(e: React.PointerEvent) {
     const g = gesture.current;
     if (!g) return;
-    const dMin = snap((e.clientY - g.y0) / PX_PER_MIN);
+    const dy = e.clientY - g.y0;
+
+    if (!g.armed) {
+      // The finger moved before the hold completed — that is a scroll, not a
+      // drag. Stand down and let the page have the gesture.
+      if (Math.abs(dy) > DRAG_THRESHOLD_PX) {
+        if (g.timer != null) clearTimeout(g.timer);
+        gesture.current = null;
+        setArmedId(null);
+      }
+      return;
+    }
+
+    // Below the threshold a press is still a tap, so a slightly unsteady finger
+    // opens the sheet instead of nudging the block by five minutes.
+    if (!g.moved && Math.abs(dy) < DRAG_THRESHOLD_PX) return;
+
+    const dMin = snap(dy / PX_PER_MIN);
     if (dMin === 0 && !g.moved) return;
     g.moved = true;
+    setActiveId(g.id);
 
     let s = g.s0;
     let en = g.e0;
@@ -195,7 +278,16 @@ export function Ribbon({
     const g = gesture.current;
     gesture.current = null;
     setActiveId(null);
-    if (!g || !g.moved) return;
+    setArmedId(null);
+    if (!g) return;
+    if (g.timer != null) clearTimeout(g.timer);
+
+    // Pressed but never dragged: that is a tap, and a tap opens the block.
+    if (!g.moved) {
+      setSheetFor(g.id);
+      return;
+    }
+
     const startMin = g.curS;
     const endMin = g.curE;
     startSave(async () => {
@@ -221,7 +313,11 @@ export function Ribbon({
       {view === "list" ? (
         <ListView blocks={blocks} onOpen={setSheetFor} />
       ) : (
-        <div className="relative" style={{ height, paddingLeft: GUTTER_PX }}>
+        <div
+          ref={surfaceRef}
+          className="relative"
+          style={{ height, paddingLeft: GUTTER_PX }}
+        >
           {/* the spine */}
           <div
             aria-hidden
@@ -291,6 +387,7 @@ export function Ribbon({
             const showReason = blockH >= REASON_PX && !!b.reason;
             const color = blockColor(b.category, b.kind);
             const dragging = activeId === b.id;
+            const armed = armedId === b.id;
 
             return (
               <div
@@ -302,7 +399,7 @@ export function Ribbon({
                 onPointerMove={editable ? onDragMove : undefined}
                 onPointerUp={editable ? onDragEnd : undefined}
                 onPointerCancel={editable ? onDragEnd : undefined}
-                onClick={() => !dragging && setSheetFor(b.id)}
+                {...(editable ? {} : { onClick: () => setSheetFor(b.id) })}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
@@ -311,15 +408,21 @@ export function Ribbon({
                 }}
                 className={cn(
                   "absolute right-0 flex overflow-hidden rounded-[18px] text-left",
-                  dragging ? "z-40" : "z-10",
+                  dragging || armed ? "z-40" : "z-10",
                   done ? "opacity-[.74]" : skipped ? "opacity-60" : "shadow-card",
+                  editable && !isBreak && "cursor-grab",
+                  dragging && "cursor-grabbing",
                 )}
                 style={{
                   left: GUTTER_PX,
                   top,
                   height: blockH,
                   background: done ? "#F6F1E7" : "var(--color-surface)",
-                  touchAction: editable ? "none" : undefined,
+                  // Lifted while the drag is live, so a long press on a phone
+                  // visibly confirms it took before the finger moves.
+                  boxShadow: dragging || armed ? "var(--shadow-open)" : undefined,
+                  transform: dragging || armed ? "scale(1.015)" : undefined,
+                  transition: dragging ? "none" : "transform 120ms ease-out",
                 }}
               >
                 {/* the bucket bar */}
@@ -405,7 +508,8 @@ export function Ribbon({
 
       {view === "ribbon" ? (
         <p className="text-[11.5px] font-semibold text-ink-faint">
-          Height is duration. Tap a block for the reasoning.
+          Height is duration. Tap a block for the reasoning
+          {editable ? ", hold and drag to move it, or pull its edges to resize" : ""}.
         </p>
       ) : null}
 
