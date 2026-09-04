@@ -15,7 +15,7 @@ import { runChatTurn, CallBudget, ModelBudgetError } from "@/lib/ai/provider";
 import { CHAT_SYSTEM_PROMPT } from "@/lib/ai/prompts/chat";
 import { formatIst, istToday } from "@/lib/time";
 import { CHAT_TOOLS, executeChatTool } from "@/lib/ai/chat-tools";
-import type { ChatTurn } from "@/lib/ai/adapters/types";
+import type { ChatTurn, ToolResponse } from "@/lib/ai/adapters/types";
 
 const HISTORY_FOR_CONTEXT = 30;
 const KEEP_MESSAGES = 200;
@@ -99,7 +99,10 @@ export async function runChat(userText: string): Promise<ChatReply> {
 
     // tool calls
     turns.push({ role: "model", calls: out.calls, raw: out.raw });
-    const responses: { name: string; response: Record<string, unknown> }[] = [];
+    // Carry each call's provider id onto its response: Anthropic correlates a
+    // tool_result to its tool_use by id, and two calls to the SAME tool in one
+    // turn are indistinguishable without it.
+    const responses: ToolResponse[] = [];
     for (const call of out.calls) {
       const exec = await executeChatTool(call.name, call.args);
       if ("confirm" in exec) {
@@ -107,6 +110,7 @@ export async function runChat(userText: string): Promise<ChatReply> {
         toolTrace.push({ name: call.name, args: call.args, result: "pending confirmation" });
         responses.push({
           name: call.name,
+          id: call.id,
           response: {
             status: "awaiting_user_confirmation",
             note: "A confirmation card is shown to the person. It has not run.",
@@ -114,7 +118,7 @@ export async function runChat(userText: string): Promise<ChatReply> {
         });
       } else {
         toolTrace.push({ name: call.name, args: call.args, result: exec.result });
-        responses.push({ name: call.name, response: exec.result });
+        responses.push({ name: call.name, id: call.id, response: exec.result });
       }
     }
     turns.push({ role: "tool", responses });

@@ -3,8 +3,8 @@
 A single-user AI day planner. Full specification in [SPEC.md](./SPEC.md).
 
 Stack: Next.js 16 (App Router, TypeScript strict) · Tailwind CSS v4 · Postgres on
-Neon · Drizzle ORM + drizzle-kit · Zod · date-fns · Gemini (`@google/genai`) with
-an Anthropic adapter behind the same interface.
+Neon · Drizzle ORM + drizzle-kit · Zod · date-fns · Anthropic
+(`@anthropic-ai/sdk`) with a Gemini adapter behind the same interface.
 
 ---
 
@@ -24,11 +24,18 @@ Calendar and capture variables are still placeholders until Phase 6.
 
 ### Model notes
 
-- Provider is chosen by `LLM_PROVIDER` (`gemini` active). Model IDs are in
+- Provider is chosen by `LLM_PROVIDER` (`anthropic` active — the Gemini free
+  tier is ~20 requests/day, too tight for daily use). Model IDs are in
   [`lib/ai/models.ts`](lib/ai/models.ts); each can be pinned via an env var
   (`GEMINI_COMPOSE_MODEL`, …) to ride out an outage.
-- Default compose model is `gemini-3.7-flash`. If it returns HTTP 503
-  ("high demand"), pin `GEMINI_COMPOSE_MODEL=gemini-3.6-flash` until it recovers.
+- Anthropic defaults: compose `claude-sonnet-5`, capture `claude-haiku-4-5`,
+  reason `claude-sonnet-5`. Model ids carry no date suffix.
+- Every configured id is checked at boot against the provider's own model list
+  (Gemini ListModels, Anthropic `GET /v1/models`) and reported on one `[models]`
+  line. A `✗` names the bad id and suggests near matches — read it after the
+  first deploy, since the Anthropic ids have had no other verification.
+- On Gemini, a 503 ("high demand") on compose can be ridden out by pinning
+  `GEMINI_COMPOSE_MODEL=gemini-3.6-flash`.
 - `node --conditions=react-server --import tsx scripts/try-compose.ts` dry-runs a
   compose against the real DB + model without writing anything.
 

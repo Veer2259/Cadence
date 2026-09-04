@@ -8,6 +8,7 @@ import {
   CallBudget,
   ModelBudgetError,
   classifyRateError,
+  dailyQuotaResetHint,
 } from "./budget";
 
 test("CallBudget hands out exactly `max` claims, then throws", () => {
@@ -62,4 +63,52 @@ test("classifyRateError flags transient 5xx and ignores the rest", () => {
   assert.equal(classifyRateError({ status: 400, message: "bad request" }), null);
   assert.equal(classifyRateError(new Error("network")), null);
   assert.equal(classifyRateError(new ModelBudgetError(3, 3, "x")), null);
+});
+
+/* ------------------------------------------------------------------ */
+/*  Anthropic error shapes                                            */
+/* ------------------------------------------------------------------ */
+
+test("529 overloaded_error is retryable, not a hard failure", () => {
+  // Anthropic's overloaded response. Before 529 was listed it classified as
+  // null and was thrown instead of backed off.
+  assert.equal(classifyRateError({ status: 529 }), "5xx");
+  assert.equal(
+    classifyRateError({ message: '{"type":"error","error":{"type":"overloaded_error"}}' }),
+    "5xx",
+  );
+});
+
+test("Anthropic 429 rate_limit_error backs off per-minute", () => {
+  assert.equal(
+    classifyRateError({
+      status: 429,
+      message: '{"type":"error","error":{"type":"rate_limit_error"}}',
+    }),
+    "rpm",
+  );
+});
+
+test("Anthropic tokens-per-day is the daily ceiling, not a per-minute limit", () => {
+  assert.equal(
+    classifyRateError({
+      status: 429,
+      message: '{"error":{"type":"rate_limit_error","message":"tokens per day limit reached"}}',
+    }),
+    "rpd",
+  );
+});
+
+test("Gemini per-day classification is unchanged", () => {
+  assert.equal(
+    classifyRateError({ status: 429, message: "RESOURCE_EXHAUSTED GenerateRequestsPerDay" }),
+    "rpd",
+  );
+  assert.equal(classifyRateError({ status: 429, message: "RESOURCE_EXHAUSTED" }), "rpm");
+});
+
+test("dailyQuotaResetHint does not invent an Anthropic reset clock", () => {
+  const anthropic = dailyQuotaResetHint(new Date(), "anthropic");
+  assert.ok(!/pacific/i.test(anthropic), "must not claim a Pacific-midnight reset");
+  assert.match(dailyQuotaResetHint(new Date(), "gemini"), /Pacific/);
 });

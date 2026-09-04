@@ -2,9 +2,15 @@
  * lib/ai/models.ts — the ONE place model IDs live. Swap here, nowhere else.
  *
  * Provider is chosen at runtime by the LLM_PROVIDER env var ("gemini" | "anthropic").
+ *
  * Gemini model IDs verified against https://ai.google.dev/gemini-api/docs/models
  * (Aug 2026): gemini-3.7-flash is the current stable flagship Flash; the current
  * lightweight tier is gemini-3.5-flash-lite.
+ *
+ * Anthropic model IDs are checked at boot against GET /v1/models — see
+ * lib/ai/model-check.ts. They have NOT been verified against a live key yet
+ * (there was none when they were written), so the boot check is the thing that
+ * confirms them: watch for the [models] line on the first deploy.
  */
 
 export type ProviderName = "gemini" | "anthropic";
@@ -33,10 +39,16 @@ const MODELS: Record<ProviderName, Record<ModelRole, string>> = {
     reason: "gemini-3.7-flash",
   },
   anthropic: {
-    // SPEC section 6 strings.
+    // Mid-tier for the daily planner: compose runs every day.
     compose: "claude-sonnet-5",
-    capture: "claude-haiku-4-5-20251001",
-    reason: "claude-opus-5",
+    // Small and fast — capture parsing, classification, debrief summary.
+    // NOTE: the id is "claude-haiku-4-5", with NO date suffix. This previously
+    // read "claude-haiku-4-5-20251001"; date-suffixed ids are not valid model
+    // strings and would have 404'd on first use — exactly the failure the boot
+    // check exists to catch.
+    capture: "claude-haiku-4-5",
+    // Breakdown, and the timetable parse: reads a table and refuses to guess.
+    reason: "claude-sonnet-5",
   },
 };
 

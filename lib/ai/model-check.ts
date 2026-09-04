@@ -13,6 +13,9 @@
 import { activeProvider, configuredModels, type ProviderName } from "./models";
 
 const GEMINI_LIST_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+const ANTHROPIC_LIST_URL = "https://api.anthropic.com/v1/models";
+/** Required on every Anthropic REST call. */
+const ANTHROPIC_VERSION = "2023-06-01";
 /** register() blocks the server from serving, so this is deliberately short. */
 const TIMEOUT_MS = 5000;
 
@@ -53,6 +56,42 @@ export async function listGeminiModels(apiKey: string): Promise<string[]> {
   return out;
 }
 
+/**
+ * Model ids on this key, from GET /v1/models.
+ *
+ * The Models API is GA — no beta header — and pages with `has_more` / `last_id`.
+ * Each entry carries `id`, `display_name`, `created_at`, and (since Mar 2026)
+ * `max_input_tokens`, `max_tokens` and `capabilities`; we only need the ids.
+ */
+export async function listAnthropicModels(apiKey: string): Promise<string[]> {
+  const out: string[] = [];
+  let afterId = "";
+  for (let page = 0; page < 5; page++) {
+    const url =
+      `${ANTHROPIC_LIST_URL}?limit=100` +
+      (afterId ? `&after_id=${encodeURIComponent(afterId)}` : "");
+    const res = await fetch(url, {
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": ANTHROPIC_VERSION,
+      },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      throw new Error(`GET /v1/models returned HTTP ${res.status}`);
+    }
+    const json = (await res.json()) as {
+      data?: { id: string }[];
+      has_more?: boolean;
+      last_id?: string | null;
+    };
+    for (const m of json.data ?? []) out.push(m.id);
+    if (!json.has_more || !json.last_id) break;
+    afterId = json.last_id;
+  }
+  return out;
+}
+
 /** Cheap similarity, so a typo gets a "did you mean" rather than a shrug. */
 function nearest(target: string, pool: string[], n = 3): string[] {
   const score = (a: string) => {
@@ -74,22 +113,20 @@ export async function checkModelIds(): Promise<ModelCheck> {
   const configured = configuredModels(provider);
   const base: ModelCheck = { provider, checked: false, ok: [], bad: [] };
 
-  if (provider !== "gemini") {
-    // Anthropic has no equivalent public list endpoint we can hit cheaply here.
-    // Say so rather than implying the ids were verified.
-    return { ...base, reason: "no model-list endpoint used for this provider" };
-  }
-
-  const key = process.env.GEMINI_API_KEY;
+  const keyName = provider === "gemini" ? "GEMINI_API_KEY" : "ANTHROPIC_API_KEY";
+  const key = process.env[keyName];
   if (!key || !key.trim()) {
-    return { ...base, reason: "GEMINI_API_KEY is not set" };
+    return { ...base, reason: `${keyName} is not set` };
   }
 
   let available: string[];
   try {
-    available = await listGeminiModels(key.trim());
+    available =
+      provider === "gemini"
+        ? await listGeminiModels(key.trim())
+        : await listAnthropicModels(key.trim());
   } catch (e) {
-    return { ...base, reason: e instanceof Error ? e.message : "ListModels failed" };
+    return { ...base, reason: e instanceof Error ? e.message : "model list failed" };
   }
 
   const set = new Set(available);

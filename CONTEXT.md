@@ -139,15 +139,27 @@ If you add a new path that removes a block, it must write an overflow row.
 
 ## Known limitations
 
+- **Anthropic is now the active provider.** `LLM_PROVIDER=anthropic`, because
+  the Gemini free tier caps at ~20 requests/DAY on the Flash models, which is
+  too tight to plan a day with. The Gemini adapter is unchanged and still
+  selectable by flipping that one env var.
+- **The Anthropic model ids have NOT been checked against a live key.** There
+  was no `ANTHROPIC_API_KEY` available when they were written. The boot check
+  now covers both providers (`GET /v1/models` for Anthropic), so the `[models]`
+  line on the first deploy is what confirms them. Read it. Defaults are
+  compose=`claude-sonnet-5`, capture=`claude-haiku-4-5`, reason=`claude-sonnet-5`.
+  The capture id previously carried a `-20251001` date suffix, which is not a
+  valid model string and would have 404'd on first use.
+- **Anthropic rate limits are RPM / TPM / TPD**, not requests-per-day. A 429
+  carries `retry-after`. `dailyQuotaResetHint()` deliberately does NOT claim a
+  Pacific-midnight reset on that provider — that clock is Gemini's.
+- **529 `overloaded_error` is Anthropic-specific** and was previously classified
+  as non-retryable, so it was thrown rather than backed off. Now treated as
+  transient.
 - **Gemini free tier is ~20 requests/day** on 3.6/3.7 Flash, 500/day on 3.5
-  Flash Lite. A clean compose is 1 call, 3 at worst (hard-capped). The app
-  surfaces daily-quota exhaustion distinctly from per-minute rate limiting, with
-  a reset estimate.
-- **`GEMINI_COMPOSE_MODEL` is currently pinned to `gemini-3.5-flash-lite`** in
-  local `.env.local` to protect quota during development. For real use, set it
-  to `gemini-3.7-flash` or unset it.
-- **Anthropic model ids are unverified.** The boot check only covers Gemini;
-  with `LLM_PROVIDER=anthropic` it logs "not verified" rather than pretending.
+  Flash Lite — relevant only if you switch back. A clean compose is 1 call, 3 at
+  worst (hard-capped). The app surfaces daily-quota exhaustion distinctly from
+  per-minute rate limiting.
 - **Focus scores have no real data yet.** There are no debriefed days with deep
   blocks, so the scoring is proven by unit tests and the cold-start path, not by
   live scores. First real numbers appear after a few debriefs.

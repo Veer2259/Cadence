@@ -60,24 +60,52 @@ export function classifyRateError(err: unknown): RateKind {
 
   const is429 =
     status === 429 ||
-    /\b429\b|RESOURCE_EXHAUSTED|rate limit|too many requests|\bquota\b/i.test(blob);
+    /\b429\b|RESOURCE_EXHAUSTED|rate_limit_error|rate limit|too many requests|\bquota\b/i.test(
+      blob,
+    );
   if (is429) {
-    return /per[\s_-]?day|perday|requests? per day|RequestsPerDay|daily limit|\bper day\b/i.test(blob)
+    // Gemini names the metric "…PerDay". Anthropic's per-day ceiling is TOKENS
+    // per day — it has no requests-per-day tier — and names that in the body.
+    return /per[\s_-]?day|perday|requests? per day|RequestsPerDay|daily limit|\bper day\b|tokens?[\s_-]?per[\s_-]?day|\btpd\b/i.test(
+      blob,
+    )
       ? "rpd"
       : "rpm";
   }
   if (
     status === 500 ||
     status === 503 ||
-    /\b50[03]\b|UNAVAILABLE|overloaded|high demand/i.test(blob)
+    // 529 is Anthropic's overloaded_error, and it was missing here: an
+    // overloaded response classified as null, so it was thrown as a hard
+    // failure instead of being backed off. It is the single most likely
+    // transient error on that provider.
+    status === 529 ||
+    /\b50[03]\b|\b529\b|UNAVAILABLE|overloaded_error|overloaded|high demand/i.test(blob)
   ) {
     return "5xx";
   }
   return null;
 }
 
-/** Rough "resets in ~Nh" — Gemini free-tier quotas reset at midnight US Pacific. */
-export function dailyQuotaResetHint(now = new Date()): string {
+/**
+ * When the daily ceiling is likely to lift.
+ *
+ * Gemini's free-tier quotas reset at midnight US Pacific, which is a real,
+ * checkable time. Anthropic has no published per-day RESET clock — its limits
+ * are RPM / TPM / TPD and a 429 carries a `retry-after` header — so claiming a
+ * Pacific-midnight reset there would be inventing a fact. Say what is known.
+ */
+export function dailyQuotaResetHint(
+  now = new Date(),
+  provider: string = process.env.LLM_PROVIDER ?? "gemini",
+): string {
+  if (provider.toLowerCase() === "anthropic") {
+    return "this is a per-day token ceiling on your Anthropic key; it lifts on Anthropic's schedule, not a fixed local time";
+  }
+  return geminiResetHint(now);
+}
+
+function geminiResetHint(now: Date): string {
   const ptNow = new Date(
     now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }),
   );

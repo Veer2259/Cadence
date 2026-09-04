@@ -17,19 +17,19 @@ Paste these into **Vercel → Project → Settings → Environment Variables**, 
 | `DATABASE_URL` | your Neon connection string | Use the **pooled** connection (`-pooler` in the host). Must include `?sslmode=require`. |
 | `APP_PASSPHRASE` | the passphrase you type to unlock | The only auth. Choose a real one before going public — anyone with the URL and this string is in. |
 | `SESSION_SECRET` | a long random string | **Minimum 16 characters**, enforced in `lib/session.ts`. Generate one: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"` |
-| `GEMINI_API_KEY` | your Google AI Studio key | Required while `LLM_PROVIDER=gemini`. |
+| `ANTHROPIC_API_KEY` | your Anthropic console key | Required while `LLM_PROVIDER=anthropic`, which is now the default. |
 
 ### Recommended
 
 | Variable | Value | Notes |
 |---|---|---|
-| `LLM_PROVIDER` | `gemini` | Defaults to `gemini` if unset. The only other value is `anthropic`. |
+| `LLM_PROVIDER` | `anthropic` | **Set this explicitly.** It defaults to `gemini` when unset, and the Gemini free tier is ~20 requests/day — too tight for daily use. |
 
 ### Optional
 
 | Variable | When you need it |
 |---|---|
-| `ANTHROPIC_API_KEY` | Only if you set `LLM_PROVIDER=anthropic`. |
+| `GEMINI_API_KEY` | Only if you set `LLM_PROVIDER=gemini`. |
 | `GEMINI_COMPOSE_MODEL` | Pin the daily planner to a specific model. Currently pinned to `gemini-3.5-flash-lite` locally to protect quota — **for real use set `gemini-3.7-flash` or leave unset.** |
 | `GEMINI_CAPTURE_MODEL` | Pin the lightweight model. |
 | `GEMINI_REASON_MODEL` | Pin the breakdown model. |
@@ -96,10 +96,14 @@ deploy.
 1. **Model ids resolved.** Open the deployment's **Runtime Logs** and look for
    one line at boot:
    ```
-   [models] ✓ all 3 configured gemini model ids exist: compose=…, capture=…, reason=…
+   [models] ✓ all 3 configured anthropic model ids exist: compose=…, capture=…, reason=…
    ```
    A `✗` line names the bad id and suggests near matches. `not verified` means
-   `GEMINI_API_KEY` did not reach the function.
+   the provider's API key did not reach the function.
+
+   **This line is the only verification the Anthropic ids have had.** They were
+   written without a live key to check them against, so read it on the first
+   deploy rather than assuming.
 
 2. **Log in.** Visit `/login`, enter `APP_PASSPHRASE`. Landing back on `/login`
    means the passphrase does not match; a 500 usually means `SESSION_SECRET` is

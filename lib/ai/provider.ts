@@ -22,9 +22,12 @@ import { BUDGET, CallBudget, DailyQuotaError, classifyRateError } from "./budget
 import type {
   ChatStep,
   ChatTurn,
+  InputFile,
   LlmAdapter,
   ToolDeclaration,
 } from "./adapters/types";
+
+export type { InputFile } from "./adapters/types";
 
 export { CallBudget, ModelBudgetError, DailyQuotaError, dailyQuotaResetHint } from "./budget";
 
@@ -35,6 +38,8 @@ export type RunStructuredArgs<T> = {
   system: string;
   messages: ChatMessage[];
   schema: z.ZodType<T>;
+  /** Files sent WITH the prompt in the same call (e.g. a timetable PDF). */
+  files?: InputFile[];
   /** Name for the schema / forced tool. Defaults to "result". */
   schemaName?: string;
   /** Short label for logs, e.g. "compose". Defaults to `role`. */
@@ -143,6 +148,7 @@ export async function runStructured<T>({
   system,
   messages,
   schema,
+  files,
   schemaName = "result",
   purpose,
   budget,
@@ -159,7 +165,18 @@ export async function runStructured<T>({
   for (let attempt = 1; ; attempt++) {
     const { text, usage } = await withBudget(
       { budget: b, provider, model, purpose: attempt === 1 ? label : `${label}:zod-retry` },
-      () => adapter.generateJson({ model, system, messages: convo, jsonSchema, schemaName }),
+      () =>
+        adapter.generateJson({
+          model,
+          system,
+          messages: convo,
+          // Only the first attempt carries the file; the Zod-retry turn appends
+          // to the same conversation, and re-sending the PDF would double the
+          // input tokens for nothing.
+          files: attempt === 1 ? files : undefined,
+          jsonSchema,
+          schemaName,
+        }),
     );
     if (usage) {
       console.log(`[ai]   ${label} tokens — in ${usage.inputTokens} / out ${usage.outputTokens}`);

@@ -72,16 +72,27 @@ function toGeminiSchema(node: unknown): Record<string, unknown> {
 }
 
 async function generateJson(args: GenerateJsonArgs): Promise<GenerateJsonResult> {
-  const { model, system, messages, jsonSchema, schemaName } = args;
+  const { model, system, messages, files, jsonSchema, schemaName } = args;
 
-  const contents = messages.map((m) => ({
+  // Files attach to the FIRST user message so the document and the instruction
+  // describing how to read it arrive in the same call.
+  const contents = messages.map((m, i) => ({
     role: m.role,
-    parts: [{ text: m.content }],
+    parts:
+      i === 0 && m.role === "user" && files?.length
+        ? [
+            ...files.map((f) => ({
+              inlineData: { mimeType: f.mediaType, data: f.data },
+            })),
+            { text: m.content },
+          ]
+        : [{ text: m.content }],
   }));
 
   const res = await genai().models.generateContent({
     model,
-    contents,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    contents: contents as any,
     config: {
       systemInstruction: system,
       responseMimeType: "application/json",
