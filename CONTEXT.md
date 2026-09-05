@@ -69,6 +69,35 @@ real Neon database, and migrations `0000`–`0010` are applied there.
 
 These were all made deliberately. Please do not silently reverse them.
 
+### The assistant is the app; the two chat windows are one
+
+There used to be two sheets — a capture sheet on the tab bar's + and a chat
+sheet on the "Ask Cadence" handle — which meant deciding, before typing, which
+kind of thing you were about to say. That is friction paid on every entry.
+
+They are now one conversation with 27 tools covering the whole app. The + opens
+it already in brain-dump mode; the handle opens it normally. A "Brain dump"
+toggle in the composer marks a message explicitly, and the assistant also
+recognises an unmarked dump on its own — verified on the WEAKEST configured
+model, which routed "ok brain's full — chase the vendor quote, renew the car
+insurance…" to capture rather than acting on it.
+
+The toggle exists as well as the judgement because the two failure directions
+are not symmetric: an instruction misread as a dump costs a rejected card, while
+a dump misread as instructions starts editing the day.
+
+Capture still never writes. It proposes into a review card inside the chat, with
+keep/discard per task, and only what survives is saved (SPEC 6.2). Committing,
+discarding and closing the day all return confirmation cards too — closing
+because it is final.
+
+The rail runs on its own `chat` model role, set to the strongest available
+(claude-opus-5 on Anthropic), because routing across 27 tools and telling a dump
+from an instruction is the hardest judgement in the app.
+
+Two things stay outside: the day profile and the timetable PDF import. The
+prompt tells the assistant to send you to Settings rather than improvise.
+
 ### Rebalance was cut; the assistant rail replans instead
 
 There is no rebalance button, screen or mode. It was a second way to do what the

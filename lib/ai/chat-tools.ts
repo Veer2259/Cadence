@@ -29,6 +29,7 @@ import { computePressure } from "@/lib/pressure";
 import { getLivePlan, applyBlockAdjustment, placeHabitBlock } from "@/lib/plan";
 import { insertCommitment } from "@/lib/commitments";
 import { emphasisFor, resolveBucketNames, setEmphasis } from "@/lib/emphasis";
+import { EXTRA_CHAT_TOOLS, executeExtraChatTool } from "@/lib/ai/chat-tools-extra";
 import type { ToolDeclaration } from "@/lib/ai/adapters/types";
 
 const CATEGORY = ["deep", "shallow", "admin"] as const;
@@ -38,7 +39,13 @@ export type ToolResult =
   | { result: Record<string, unknown> }
   | {
       confirm: {
-        kind: "compose" | "drop_block";
+        kind:
+          | "compose"
+      | "drop_block"
+      | "capture_tasks"
+      | "commit_plan"
+      | "discard_plan"
+      | "close_day";
         params: Record<string, unknown>;
       };
     };
@@ -225,6 +232,7 @@ export const CHAT_TOOLS: ToolDeclaration[] = [
       required: ["buckets"],
     },
   },
+  ...EXTRA_CHAT_TOOLS,
 ];
 
 /* ------------------------------------------------------------------ */
@@ -253,6 +261,11 @@ export async function executeChatTool(
   name: string,
   args: Record<string, unknown>,
 ): Promise<ToolResult> {
+  // The rest of the app lives in chat-tools-extra.ts; it returns null for
+  // anything that is not one of its own.
+  const extra = await executeExtraChatTool(name, args);
+  if (extra) return extra;
+
   switch (name) {
     case "create_task": {
       const title = str(args.title);

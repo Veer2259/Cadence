@@ -24,11 +24,13 @@ export function activeProvider(): ProviderName {
 }
 
 /** Roles the app asks a model to play. Each maps to a model per provider. */
-export type ModelRole = "compose" | "capture" | "reason";
+export type ModelRole = "compose" | "capture" | "reason" | "chat";
 
 const MODELS: Record<ProviderName, Record<ModelRole, string>> = {
   gemini: {
-    // Flagship Flash — compose, week commentary, chat rail.
+    // The strongest this key can actually call — see `reason` below.
+    chat: "gemini-3.7-flash",
+    // Flagship Flash — compose and the week commentary.
     compose: "gemini-3.7-flash",
     // Lightweight — capture parsing, classification, debrief summary.
     capture: "gemini-3.5-flash-lite",
@@ -39,6 +41,13 @@ const MODELS: Record<ProviderName, Record<ModelRole, string>> = {
     reason: "gemini-3.7-flash",
   },
   anthropic: {
+    /**
+     * The assistant rail. It is now the primary way to operate the app — every
+     * feature is reachable from it — so it routes across ~27 tools, replans a
+     * day by hand, and has to tell a brain dump from an instruction. That is
+     * the hardest judgement in the app and it gets the strongest model.
+     */
+    chat: "claude-opus-5",
     // Mid-tier for the daily planner: compose runs every day.
     compose: "claude-sonnet-5",
     // Small and fast — capture parsing, classification, debrief summary.
@@ -68,7 +77,7 @@ export function modelFor(role: ModelRole, provider: ProviderName = activeProvide
   return envOverride(provider, role) ?? MODELS[provider][role];
 }
 
-export const MODEL_ROLES: ModelRole[] = ["compose", "capture", "reason"];
+export const MODEL_ROLES: ModelRole[] = ["compose", "capture", "reason", "chat"];
 
 /** Every model id this process would actually use, and where it came from. */
 export function configuredModels(

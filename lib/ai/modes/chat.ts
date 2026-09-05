@@ -35,7 +35,13 @@ const MAX_STEPS = 9;
 const CHAT_CALL_BUDGET = 11;
 
 export type PendingAction = {
-  kind: "compose" | "drop_block";
+  kind:
+    | "compose"
+      | "drop_block"
+      | "capture_tasks"
+      | "commit_plan"
+      | "discard_plan"
+      | "close_day";
   params: Record<string, unknown>;
 };
 
@@ -87,7 +93,7 @@ export async function runChat(userText: string): Promise<ChatReply> {
     let out;
     try {
       out = await runChatTurn({
-        role: "compose",
+        role: "chat",
         system,
         turns,
         tools: CHAT_TOOLS,

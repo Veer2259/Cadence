@@ -666,9 +666,27 @@ Deterministic pressure table from section 5, then a model call for `weekNote` an
 
 A persistent conversation pane on every screen, with tools:
 
-`create_task`, `update_task`, `list_tasks`, `list_habits`, `place_habit_today`,
-`create_commitment`, `get_plan`, `adjust_block`, `trigger_compose`,
-`query_time_log`, `get_pressure`, `set_bucket_emphasis`.
+27 tools, covering the whole app: capture (`capture_brain_dump`), tasks
+(`create_task`, `update_task`, `list_tasks`), the day (`get_plan`,
+`adjust_block`, `log_block_status`, `log_energy`, `trigger_compose`,
+`commit_plan`, `discard_plan`, `close_the_day`), habits and commitments
+(`list_habits`, `place_habit_today`, `create_habit`, `update_habit`,
+`create_commitment`), buckets (`list_buckets`, `create_bucket`,
+`retire_bucket`, `set_bucket_emphasis`), goals (`set_bucket_outcome`,
+`set_weekly_target`, `get_goals`) and the learned numbers (`query_time_log`,
+`get_pressure`, `get_review`).
+
+**This is the primary interface.** Most days the person will not open another
+screen. Only two things live outside it: the day profile (work windows, cap,
+protected blocks) and the timetable PDF import, which needs a file. Both are in
+Settings, and the prompt tells the assistant to say so rather than improvise.
+
+**Capture happens here too.** There is no separate brain-dump sheet. A "Brain
+dump" toggle in the composer marks a message explicitly, and the assistant also
+recognises an unmarked dump on its own — several things at once, or a stream of
+thought, versus one specific instruction. Getting that wrong in the dangerous
+direction (a dump read as instructions) would start editing the day, which is
+why the toggle exists as well as the judgement.
 
 Everything the user could do by clicking, they can do by typing. Task writes,
 commitments and habit placement execute directly; `adjust_block` move/resize

@@ -64,7 +64,7 @@ export function AppNav({ onCapture }: { onCapture: () => void }) {
         <button
           type="button"
           onClick={onCapture}
-          aria-label="Capture a brain dump"
+          aria-label="Brain dump — opens Ask Cadence ready to capture"
           className="flex h-11 w-[52px] shrink-0 items-center justify-center rounded-full bg-primary text-[22px] leading-none text-white hover:bg-primary-deep"
         >
           <span aria-hidden>+</span>
