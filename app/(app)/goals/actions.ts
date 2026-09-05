@@ -193,7 +193,7 @@ const confirmSchema = z.object({
         weeklyTargetId: z.string().uuid().nullable(),
         /** where to file a task that has no target — the goal's own bucket */
         bucketId: z.string().uuid().nullable().optional(),
-        category: z.enum(["deep", "shallow", "calls", "admin", "errand", "personal"]),
+        category: z.enum(["deep", "shallow", "admin"]),
         estimateMin: z.number().int().min(5).max(1440),
       }),
     )

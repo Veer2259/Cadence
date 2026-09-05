@@ -1,1 +1,0 @@
-ALTER TABLE "tasks" ADD COLUMN "must_do_today" boolean DEFAULT false NOT NULL;

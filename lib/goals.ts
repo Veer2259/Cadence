@@ -109,7 +109,6 @@ export type BucketGoal = {
   outcome: string | null;
   outcomeTargetDate: string | null;
   status: "active" | "achieved" | "abandoned";
-  weeklyTargetMin: number | null;
   /** whole weeks from this week's Monday to the target date; negative = past */
   weeksLeft: number | null;
 };
@@ -122,7 +121,6 @@ export async function bucketGoals(todayStr = istToday()): Promise<BucketGoal[]> 
       outcome: buckets.outcome,
       outcomeTargetDate: buckets.outcomeTargetDate,
       status: buckets.status,
-      weeklyTargetMin: buckets.weeklyTargetMin,
       active: buckets.active,
     })
     .from(buckets)
@@ -137,7 +135,6 @@ export async function bucketGoals(todayStr = istToday()): Promise<BucketGoal[]> 
       outcome: r.outcome,
       outcomeTargetDate: r.outcomeTargetDate,
       status: r.status,
-      weeklyTargetMin: r.weeklyTargetMin,
       weeksLeft: r.outcomeTargetDate
         ? Math.round(
             (Date.parse(`${weekStartOf(r.outcomeTargetDate)}T00:00:00Z`) -

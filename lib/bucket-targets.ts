@@ -7,7 +7,7 @@
  */
 
 import "server-only";
-import { and, gte, lte, eq } from "drizzle-orm";
+import { and, gte, lte } from "drizzle-orm";
 import { db } from "@/db";
 import { buckets, timeLog } from "@/db/schema";
 
@@ -15,10 +15,8 @@ export type BucketTargetRow = {
   bucketId: string;
   bucket: string;
   /** intended minutes this week, null when no target is set */
-  targetMin: number | null;
   actualMin: number;
   /** actual ÷ target, null when there is no target */
-  ratio: number | null;
 };
 
 /**
@@ -34,7 +32,6 @@ export async function bucketTargets(
     .select({
       id: buckets.id,
       name: buckets.name,
-      targetMin: buckets.weeklyTargetMin,
       active: buckets.active,
     })
     .from(buckets);
@@ -59,19 +56,11 @@ export async function bucketTargets(
       return {
         bucketId: b.id,
         bucket: b.name,
-        targetMin: b.targetMin ?? null,
         actualMin,
-        ratio: b.targetMin && b.targetMin > 0 ? actualMin / b.targetMin : null,
       };
     })
-    .filter((r) => r.targetMin !== null || r.actualMin > 0)
+    .filter((r) => r.actualMin > 0)
     .sort((a, b) => b.actualMin - a.actualMin);
 }
 
-/** Set or clear a bucket's weekly target. */
-export async function setBucketTarget(
-  bucketId: string,
-  targetMin: number | null,
-): Promise<void> {
-  await db.update(buckets).set({ weeklyTargetMin: targetMin }).where(eq(buckets.id, bucketId));
-}
+

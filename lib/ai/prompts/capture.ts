@@ -14,11 +14,10 @@ Do this:
   tasks, set possibleDuplicateOf to that exact title. Otherwise null.
 - Infer bucketName ONLY from the provided bucket list. Never invent a bucket. If
   none clearly fits, use null and let the person assign it.
-- Infer category: deep | shallow | calls | admin | errand | personal.
+- Infer category: deep | shallow | admin.
 - Infer dueAt from natural language relative to today ("Friday", "next week",
   "by the 20th"), as an ISO timestamp, or null.
 - Give a first-pass estimateMin, or null if you truly cannot guess.
-- Set priority: low | normal | high (default normal).
 
 Coaching depends on the shape of the input:
 - A concrete task ("call the mill about sampling") is captured directly, no

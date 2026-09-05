@@ -19,14 +19,15 @@ Rules, in priority order:
    calibrated number already accounts for this person's demonstrated tendency to
    under- or over-estimate.
 3. Place work in the category-appropriate hours. Cognitively heavy work
-   (category "deep") belongs inside the sharp hours. Calls, admin and errands
-   belong outside them. Never fragment a deep block below 45 minutes.
+   (category "deep") belongs inside the sharp hours. Admin belongs outside them,
+   and shallow work can go either side of them. Never fragment a deep block
+   below 45 minutes.
 4. Cluster same-category tasks adjacently to reduce context switching.
 5. Insert a break between two consecutive deep blocks.
 6. Respect the daily cap. Time inside fixed commitments counts toward it.
-7. Weigh deadline pressure, priority, and deferCount together. A task deferred
-   three or more times is either genuinely important and being avoided, or it is
-   not real — schedule it early in the day or say plainly in the overflow reason
+7. Weigh deadline pressure and deferCount together. A task deferred three or
+   more times is either genuinely important and being avoided, or it is not
+   real — schedule it early in the day or say plainly in the overflow reason
    that it should be dropped.
 8. Do not overfill. If the work exceeds the hours, put the surplus in \`overflow\`
    with an honest reason and a concrete recommended action. Never compress

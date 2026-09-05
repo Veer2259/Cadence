@@ -167,15 +167,14 @@ export async function submitDebrief(
   // --- calibration: seed the running map from existing rows ---
   const calRows = await db.select().from(calibration);
   const running = new Map<string, { ratio: number; sampleN: number }>(
-    calRows.map((r) => [`${r.scope}:${r.key}`, { ratio: Number(r.ratio), sampleN: r.sampleN }]),
+    calRows.map((r) => [r.key, { ratio: Number(r.ratio), sampleN: r.sampleN }]),
   );
   const touched = new Set<string>();
 
-  function record(scope: "category" | "bucket", key: string, sample: number) {
-    const k = `${scope}:${key}`;
-    const cur = running.get(k) ?? { ratio: 1, sampleN: 0 };
-    running.set(k, { ratio: nextRatio(sample, cur.ratio), sampleN: cur.sampleN + 1 });
-    touched.add(k);
+  function record(key: string, sample: number) {
+    const cur = running.get(key) ?? { ratio: 1, sampleN: 0 };
+    running.set(key, { ratio: nextRatio(sample, cur.ratio), sampleN: cur.sampleN + 1 });
+    touched.add(key);
   }
 
   for (const r of resolved) {
@@ -183,9 +182,7 @@ export async function submitDebrief(
     if (r.status === "skipped" || r.actualMin == null) continue;
     const sample = sampleFor(r.actualMin, r.block.rawEstimateMin);
     if (sample == null) continue;
-    record("category", r.block.category, sample);
-    const bucketId = r.block.taskId ? bucketByTask.get(r.block.taskId) : null;
-    if (bucketId) record("bucket", bucketId, sample);
+    record(r.block.category, sample);
   }
 
   // --- carry-over: per task, done only if every one of its blocks is done ---
@@ -265,14 +262,13 @@ export async function submitDebrief(
     if (logRows.length) await tx.insert(timeLog).values(logRows);
 
     // 3. calibration upserts
-    for (const k of touched) {
-      const [scope, key] = k.split(/:(.+)/) as ["category" | "bucket", string];
-      const v = running.get(k)!;
+    for (const key of touched) {
+      const v = running.get(key)!;
       await tx
         .insert(calibration)
-        .values({ scope, key, ratio: v.ratio.toFixed(2), sampleN: v.sampleN })
+        .values({ key, ratio: v.ratio.toFixed(2), sampleN: v.sampleN })
         .onConflictDoUpdate({
-          target: [calibration.scope, calibration.key],
+          target: calibration.key,
           set: { ratio: v.ratio.toFixed(2), sampleN: v.sampleN, updatedAt: now },
         });
     }

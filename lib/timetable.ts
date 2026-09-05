@@ -145,7 +145,7 @@ export type ExistingCommitment = {
   title: string;
   /** IST date */
   date: string;
-  source: "manual" | "gcal" | "timetable";
+  source: "manual" | "timetable";
 };
 
 /**

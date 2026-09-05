@@ -176,7 +176,6 @@ const existing = [
   { id: "t2", title: "ABMA_B", date: "2026-09-11", source: "timetable" as const },
   { id: "t3", title: "PWMC_B", date: "2026-08-31", source: "timetable" as const },
   { id: "m1", title: "Dentist", date: "2026-09-08", source: "manual" as const },
-  { id: "g1", title: "Standup", date: "2026-09-09", source: "gcal" as const },
 ];
 
 test("a re-import replaces only imported rows inside the new range", () => {
@@ -188,11 +187,6 @@ test("a MANUAL commitment inside the range is never touched", () => {
   const doomed = commitmentsToReplace(existing, { start: "2026-09-01", end: "2026-09-30" });
   assert.ok(!doomed.some((c) => c.source === "manual"), "manual rows must survive");
   assert.ok(!doomed.some((c) => c.id === "m1"));
-});
-
-test("a gcal commitment is not a timetable row and is not replaced", () => {
-  const doomed = commitmentsToReplace(existing, { start: "2026-09-01", end: "2026-09-30" });
-  assert.ok(!doomed.some((c) => c.id === "g1"));
 });
 
 test("imported rows OUTSIDE the new range survive", () => {

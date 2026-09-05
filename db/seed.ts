@@ -54,8 +54,8 @@ async function insertSeedData() {
   const bucketRows = await db
     .insert(buckets)
     .values([
-      { name: "work", color: "#2f5d50", priorityHint: "weekday priority" },
-      { name: "side-project", color: "#8c1d18", priorityHint: "evenings and weekends" },
+      { name: "work", color: "#2f5d50" },
+      { name: "side-project", color: "#8c1d18" },
       { name: "learning", color: "#a67c00" },
       { name: "home", color: "#6b7178" },
     ])
@@ -90,21 +90,21 @@ async function insertSeedData() {
 
   // --- tasks: ~15, spread across categories, priorities, due dates ---
   const rows = [
-    { title: "Write Q3 planning brief", notes: "Two pages, decision-focused.", bucketId: b.work, category: "deep", estimateMin: 120, dueAt: due(1), priority: "high", status: "active", source: "manual" },
-    { title: "Review three vendor proposals", bucketId: b.work, category: "deep", estimateMin: 90, dueAt: due(2), priority: "normal", status: "active", source: "manual" },
-    { title: "Reply to the outstanding client thread", bucketId: b.work, category: "shallow", estimateMin: 25, dueAt: due(0), priority: "high", status: "active", source: "manual" },
-    { title: "Call the accountant about the filing", bucketId: b.work, category: "calls", estimateMin: 20, dueAt: due(-1), priority: "high", status: "active", source: "manual", deferCount: 2 },
-    { title: "Submit the reimbursement form", bucketId: b.work, category: "admin", estimateMin: 15, dueAt: due(3), priority: "low", status: "active", source: "manual" },
-    { title: "Prototype the onboarding screen", bucketId: b["side-project"], category: "deep", estimateMin: 150, dueAt: due(4), priority: "normal", status: "active", source: "manual" },
-    { title: "Fix the sign-up validation bug", bucketId: b["side-project"], category: "deep", estimateMin: 60, dueAt: due(2), priority: "high", status: "active", source: "manual" },
-    { title: "Draft the launch announcement", bucketId: b["side-project"], category: "shallow", estimateMin: 45, dueAt: due(6), priority: "normal", status: "active", source: "dump" },
-    { title: "Work through chapter 4 exercises", bucketId: b.learning, category: "deep", estimateMin: 75, dueAt: due(5), priority: "low", status: "active", source: "manual" },
-    { title: "Watch the systems-design lecture", bucketId: b.learning, category: "shallow", estimateMin: 50, dueAt: null, priority: "low", status: "active", source: "manual" },
-    { title: "Renew the car insurance", bucketId: b.home, category: "admin", estimateMin: 30, dueAt: due(7), priority: "normal", status: "active", source: "manual" },
-    { title: "Pick up the dry cleaning", bucketId: b.home, category: "errand", estimateMin: 20, dueAt: due(1), priority: "low", status: "active", source: "manual" },
-    { title: "Plan the weekend trip", bucketId: b.home, category: "personal", estimateMin: 40, dueAt: due(9), priority: "low", status: "active", source: "dump" },
-    { title: "Book the dentist appointment", bucketId: b.home, category: "calls", estimateMin: 10, dueAt: null, priority: "normal", status: "inbox", source: "dump" },
-    { title: "Think about next quarter's goals", notes: "Vague — needs breaking down.", bucketId: b.work, category: "deep", estimateMin: 60, dueAt: null, priority: "normal", status: "inbox", source: "dump" },
+    { title: "Write Q3 planning brief", notes: "Two pages, decision-focused.", bucketId: b.work, category: "deep", estimateMin: 120, dueAt: due(1), status: "active", source: "manual" },
+    { title: "Review three vendor proposals", bucketId: b.work, category: "deep", estimateMin: 90, dueAt: due(2), status: "active", source: "manual" },
+    { title: "Reply to the outstanding client thread", bucketId: b.work, category: "shallow", estimateMin: 25, dueAt: due(0), status: "active", source: "manual" },
+    { title: "Call the accountant about the filing", bucketId: b.work, category: "admin", estimateMin: 20, dueAt: due(-1), status: "active", source: "manual", deferCount: 2 },
+    { title: "Submit the reimbursement form", bucketId: b.work, category: "admin", estimateMin: 15, dueAt: due(3), status: "active", source: "manual" },
+    { title: "Prototype the onboarding screen", bucketId: b["side-project"], category: "deep", estimateMin: 150, dueAt: due(4), status: "active", source: "manual" },
+    { title: "Fix the sign-up validation bug", bucketId: b["side-project"], category: "deep", estimateMin: 60, dueAt: due(2), status: "active", source: "manual" },
+    { title: "Draft the launch announcement", bucketId: b["side-project"], category: "shallow", estimateMin: 45, dueAt: due(6), status: "active", source: "dump" },
+    { title: "Work through chapter 4 exercises", bucketId: b.learning, category: "deep", estimateMin: 75, dueAt: due(5), status: "active", source: "manual" },
+    { title: "Watch the systems-design lecture", bucketId: b.learning, category: "shallow", estimateMin: 50, dueAt: null, status: "active", source: "manual" },
+    { title: "Renew the car insurance", bucketId: b.home, category: "admin", estimateMin: 30, dueAt: due(7), status: "active", source: "manual" },
+    { title: "Pick up the dry cleaning", bucketId: b.home, category: "admin", estimateMin: 20, dueAt: due(1), status: "active", source: "manual" },
+    { title: "Plan the weekend trip", bucketId: b.home, category: "shallow", estimateMin: 40, dueAt: due(9), status: "active", source: "dump" },
+    { title: "Book the dentist appointment", bucketId: b.home, category: "admin", estimateMin: 10, dueAt: null, status: "inbox", source: "dump" },
+    { title: "Think about next quarter's goals", notes: "Vague — needs breaking down.", bucketId: b.work, category: "deep", estimateMin: 60, dueAt: null, status: "inbox", source: "dump" },
   ] as const;
 
   const taskRows = await db

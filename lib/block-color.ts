@@ -10,21 +10,12 @@
  * commitment is visually distinct regardless of what it is about.
  */
 
-export type BlockCategory =
-  | "deep"
-  | "shallow"
-  | "calls"
-  | "admin"
-  | "errand"
-  | "personal";
+export type BlockCategory = "deep" | "shallow" | "admin";
 
 const BY_CATEGORY: Record<BlockCategory, string> = {
   deep: "var(--color-bucket-growth)",
   shallow: "var(--color-bucket-ops)",
-  calls: "var(--color-bucket-churn)",
-  admin: "var(--color-bucket-ops)",
-  errand: "var(--color-bucket-churn)",
-  personal: "var(--color-bucket-personal)",
+  admin: "var(--color-bucket-churn)",
 };
 
 export const FIXED_COLOR = "var(--color-bucket-fixed)";

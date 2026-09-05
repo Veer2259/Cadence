@@ -112,7 +112,6 @@ export async function outcomeProjections(
       outcome: buckets.outcome,
       targetDate: buckets.outcomeTargetDate,
       status: buckets.status,
-      weeklyTargetMin: buckets.weeklyTargetMin,
       active: buckets.active,
     })
     .from(buckets);
@@ -143,7 +142,7 @@ export async function outcomeProjections(
           (7 * 86_400_000),
       ),
     );
-    const targetRate = r.weeklyTargetMin != null ? round1(r.weeklyTargetMin / 60) : null;
+    const targetRate: number | null = null;
     const atRate = round1(rate * weeksLeft);
     const onTarget = targetRate != null ? round1(targetRate * weeksLeft) : null;
 

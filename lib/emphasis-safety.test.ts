@@ -13,7 +13,6 @@ function task(id: string, min: number, extra: Partial<ComposeTask> = {}): Compos
     rawEstimateMin: min,
     calibratedEstimateMin: min,
     dueAt: null,
-    priority: "normal",
     deferCount: 0,
     mustDoToday: false,
     ...extra,

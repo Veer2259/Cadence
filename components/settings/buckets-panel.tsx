@@ -3,7 +3,6 @@
 import { useActionState, useEffect, useRef } from "react";
 import {
   createBucket,
-  saveBucketTarget,
   updateBucket,
   setBucketActive,
   type FormResult,
@@ -17,8 +16,6 @@ type Bucket = {
   id: string;
   name: string;
   color: string;
-  priorityHint: string | null;
-  weeklyTargetMin: number | null;
   active: boolean;
 };
 
@@ -48,9 +45,6 @@ function AddBucket() {
       <Labeled label="Colour">
         <Input name="color" type="color" defaultValue="#2f5d50" className="h-9 w-14 p-1" />
       </Labeled>
-      <Labeled label="Priority hint">
-        <Input name="priorityHint" placeholder="e.g. weekday priority" className="w-48" />
-      </Labeled>
       <Button type="submit" disabled={pending}>
         {pending ? "Adding…" : "Add bucket"}
       </Button>
@@ -74,14 +68,6 @@ function BucketRow({ bucket }: { bucket: Bucket }) {
         />
         <div className="min-w-0 flex-1">
           <span className="text-sm text-ink">{bucket.name}</span>
-          {bucket.priorityHint ? (
-            <span className="ml-2 text-xs text-ink-muted">{bucket.priorityHint}</span>
-          ) : null}
-          {bucket.weeklyTargetMin ? (
-            <span className="tabular ml-2 text-xs text-ink-muted">
-              · {(bucket.weeklyTargetMin / 60).toFixed(1)}h/wk target
-            </span>
-          ) : null}
           {!bucket.active ? (
             <span className="ml-2 text-xs text-ink-muted">· retired</span>
           ) : null}
@@ -118,13 +104,6 @@ function BucketRow({ bucket }: { bucket: Bucket }) {
               className="h-9 w-14 p-1"
             />
           </Labeled>
-          <Labeled label="Priority hint">
-            <Input
-              name="priorityHint"
-              defaultValue={bucket.priorityHint ?? ""}
-              className="w-48"
-            />
-          </Labeled>
           <Button type="submit" disabled={pending}>
             {pending ? "Saving…" : "Save"}
           </Button>
@@ -134,33 +113,6 @@ function BucketRow({ bucket }: { bucket: Bucket }) {
         </form>
       ) : null}
 
-      {editing ? (
-        <form
-          action={saveBucketTarget}
-          className="mt-2 flex flex-wrap items-end gap-2 border-t border-line pt-2"
-        >
-          <input type="hidden" name="bucketId" value={bucket.id} />
-          <Labeled
-            label="Weekly target (hours)"
-            hint="Intent only — nothing schedules against it. Blank to clear."
-          >
-            <Input
-              name="targetHours"
-              type="number"
-              min={0}
-              max={168}
-              step={0.5}
-              defaultValue={
-                bucket.weeklyTargetMin != null ? bucket.weeklyTargetMin / 60 : ""
-              }
-              className="w-28"
-            />
-          </Labeled>
-          <Button type="submit" variant="quiet">
-            Save target
-          </Button>
-        </form>
-      ) : null}
     </li>
   );
 }

@@ -47,7 +47,6 @@ export default async function InboxPage({
     .where(
       and(
         inArray(tasks.status, ["inbox", "active"]),
-        sql`${tasks.parentId} is null`,
         bucketFilter ? eq(tasks.bucketId, bucketFilter) : undefined,
       ),
     )
@@ -62,7 +61,6 @@ export default async function InboxPage({
     title: t.title,
     notes: t.notes,
     category: t.category,
-    priority: t.priority,
     status: t.status as TaskView["status"],
     estimateMin: t.estimateMin,
     deferCount: t.deferCount,

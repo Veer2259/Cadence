@@ -16,15 +16,11 @@ export function BucketTargets({ rows }: { rows: BucketTargetRow[] }) {
     );
   }
 
-  const max = Math.max(
-    1,
-    ...rows.map((r) => Math.max(r.actualMin, r.targetMin ?? 0)),
-  );
+  const max = Math.max(1, ...rows.map((r) => r.actualMin));
 
   return (
     <ul className="flex flex-col gap-3">
       {rows.map((r) => {
-        const targetPct = r.targetMin ? (r.targetMin / max) * 100 : null;
         const actualPct = (r.actualMin / max) * 100;
         return (
           <li key={r.bucketId} className="flex flex-col gap-1.5">
@@ -38,7 +34,7 @@ export function BucketTargets({ rows }: { rows: BucketTargetRow[] }) {
                 {r.bucket}
               </span>
               <span className="tabular text-[11.5px] font-semibold text-ink-faint">
-                {hrs(r.actualMin)}h{r.targetMin ? ` of ${hrs(r.targetMin)}h` : " · no target"}
+                {hrs(r.actualMin)}h
               </span>
             </div>
 
@@ -49,15 +45,6 @@ export function BucketTargets({ rows }: { rows: BucketTargetRow[] }) {
                   style={{ width: `${actualPct}%`, background: dotFor(r.bucket) }}
                 />
               </div>
-              {/* The target notch: colour alone would not survive a screenshot,
-                  so the figure is spelled out in the label above too. */}
-              {targetPct !== null ? (
-                <span
-                  aria-hidden
-                  className="absolute top-full h-1.5 w-0.5 bg-ink"
-                  style={{ left: `${targetPct}%` }}
-                />
-              ) : null}
             </div>
           </li>
         );

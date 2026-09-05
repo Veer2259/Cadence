@@ -40,7 +40,6 @@ const base = (planFromMin: number): ComposeInput => ({
     rawEstimateMin: 60,
     calibratedEstimateMin: 60,
     dueAt: null,
-    priority: "normal",
     deferCount: 0,
     mustDoToday: false,
   }],

@@ -6,7 +6,7 @@ import { Button, Input, Select } from "@/components/ui/controls";
 import { runKickoff, confirmKickoff } from "@/app/(app)/goals/actions";
 import { describeThrown } from "@/lib/thrown";
 
-const CATEGORIES = ["deep", "shallow", "calls", "admin", "errand", "personal"] as const;
+const CATEGORIES = ["deep", "shallow", "admin"] as const;
 
 type Candidate = {
   title: string;

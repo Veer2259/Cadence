@@ -82,7 +82,6 @@ export async function computeReview(now = new Date()): Promise<ReviewData> {
   const catRows = await db
     .select()
     .from(calibration)
-    .where(eq(calibration.scope, "category"))
     .orderBy(calibration.key);
   const categories: CategoryRatio[] = catRows.map((r) => ({
     category: r.key,

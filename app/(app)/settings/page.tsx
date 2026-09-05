@@ -100,8 +100,6 @@ export default async function SettingsPage() {
             id: b.id,
             name: b.name,
             color: b.color,
-            priorityHint: b.priorityHint,
-            weeklyTargetMin: b.weeklyTargetMin,
             active: b.active,
           }))}
         />

@@ -30,17 +30,15 @@ import {
 /*  Enums                                                                      */
 /* -------------------------------------------------------------------------- */
 
-/** Work type. Shared by tasks, blocks and the time log. */
-export const categoryEnum = pgEnum("category", [
-  "deep",
-  "shallow",
-  "calls",
-  "admin",
-  "errand",
-  "personal",
-]);
-
-export const taskPriorityEnum = pgEnum("task_priority", ["low", "normal", "high"]);
+/**
+ * Work type. Shared by tasks, blocks and the time log.
+ *
+ * Three, not six. `calls`, `errand` and `personal` were choices paid for at
+ * task entry — on every task, every day — and they bought almost nothing: they
+ * split the calibration history into thinner slices without changing where the
+ * planner put anything.
+ */
+export const categoryEnum = pgEnum("category", ["deep", "shallow", "admin"]);
 
 export const taskStatusEnum = pgEnum("task_status", [
   "inbox",
@@ -49,16 +47,10 @@ export const taskStatusEnum = pgEnum("task_status", [
   "dropped",
 ]);
 
-export const taskSourceEnum = pgEnum("task_source", [
-  "dump",
-  "manual",
-  "voice",
-  "carryover",
-]);
+export const taskSourceEnum = pgEnum("task_source", ["dump", "manual", "carryover"]);
 
 export const commitmentSourceEnum = pgEnum("commitment_source", [
   "manual",
-  "gcal",
   /** created by a timetable PDF import — replaceable, unlike a manual one */
   "timetable",
 ]);
@@ -88,8 +80,6 @@ export const overflowActionEnum = pgEnum("overflow_action", [
   "drop",
 ]);
 
-export const calibrationScopeEnum = pgEnum("calibration_scope", ["category", "bucket"]);
-
 /** How sharp the user felt. Ordered worst -> best so the ordinal is meaningful. */
 export const energyLevelEnum = pgEnum("energy_level", ["fried", "ok", "sharp"]);
 
@@ -118,13 +108,6 @@ export const buckets = pgTable("buckets", {
   name: text("name").notNull().unique(),
   color: text("color").notNull(), // hex
   active: boolean("active").notNull().default(true),
-  priorityHint: text("priority_hint"), // free text passed to the planner
-  /**
-   * Intended hours per week for this bucket, in minutes. Null = no target.
-   * The Week screen compares this against logged time. It is a statement of
-   * intent only — nothing schedules against it and nothing enforces it.
-   */
-  weeklyTargetMin: integer("weekly_target_min"),
   /**
    * The guiding star: what "done" looks like, in one sentence. A bucket with no
    * outcome is just a label, and behaves exactly as it always has.
@@ -156,13 +139,8 @@ export const tasks = pgTable(
     /** the user's or the model's raw estimate, uncalibrated */
     estimateMin: integer("estimate_min"),
     dueAt: timestamp("due_at", { withTimezone: true }),
-    priority: taskPriorityEnum("priority").notNull().default("normal"),
     /** `inbox` = captured, not yet confirmed. Only `active` tasks are planned. */
     status: taskStatusEnum("status").notNull().default("inbox"),
-    /** self-reference for subtasks, one level only (enforced in app code) */
-    parentId: uuid("parent_id").references((): AnyPgColumn => tasks.id, {
-      onDelete: "cascade",
-    }),
     /**
      * OPTIONAL link to a week's target. A task without one must behave exactly
      * as it always has — if assigning a target were ever a precondition for
@@ -172,9 +150,9 @@ export const tasks = pgTable(
       onDelete: "set null",
     }),
     /**
-     * A hard constraint, not a priority. A must-do task CANNOT be sent to
-     * overflow: compose refuses to build a plan that defers one. Deliberately
-     * separate from `priority`, which only ranks.
+     * A hard constraint. A must-do task CANNOT be sent to overflow: compose
+     * refuses to build a plan that defers one. Importance otherwise lives in
+     * due_at, defer_count and the day's bucket emphasis.
      */
     mustDoToday: boolean("must_do_today").notNull().default(false),
     /** incremented whenever a task is carried past its planned day */
@@ -202,7 +180,6 @@ export const commitments = pgTable("commitments", {
   /** RRULE string. Support is deliberately minimal: daily / weekly-by-day. */
   recurrence: text("recurrence"),
   source: commitmentSourceEnum("source").notNull().default("manual"),
-  gcalEventId: text("gcal_event_id"),
   /**
    * The timetable import that created this row, when source = "timetable".
    *
@@ -455,18 +432,24 @@ export const timeLog = pgTable("time_log", {
 /*  calibration — accumulated actual/estimate ratios, the compounding feature  */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Category is the only scope.
+ *
+ * Bucket-scope ratios were computed on every debrief and read by nothing: every
+ * consumer — compose, rebalance, capacity, pressure, review — already filtered
+ * to the category rows. They were write-only.
+ */
 export const calibration = pgTable(
   "calibration",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    scope: calibrationScopeEnum("scope").notNull(),
-    key: text("key").notNull(), // the category name or the bucket id
+    key: text("key").notNull(), // the category name
     /** actual / estimate, exponentially weighted */
     ratio: numeric("ratio", { precision: 4, scale: 2 }).notNull().default("1.00"),
     sampleN: integer("sample_n").notNull().default(0),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("calibration_scope_key_uq").on(t.scope, t.key)],
+  (t) => [uniqueIndex("calibration_key_uq").on(t.key)],
 );
 
 /* -------------------------------------------------------------------------- */

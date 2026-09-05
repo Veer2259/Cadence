@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { createTask, type FormResult } from "@/app/(app)/inbox/actions";
-import { CATEGORIES, PRIORITIES } from "@/lib/schemas";
+import { CATEGORIES } from "@/lib/schemas";
 import { Button, Input, Labeled, Select } from "@/components/ui/controls";
 
 const INITIAL: FormResult = { ok: true, errors: [] };
@@ -65,15 +65,6 @@ export function AddTaskForm({ buckets }: { buckets: { id: string; name: string }
             </Select>
           </Labeled>
 
-          <Labeled label="Priority">
-            <Select name="priority" defaultValue="normal">
-              {PRIORITIES.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </Select>
-          </Labeled>
 
           <Labeled label="Estimate (min)">
             <Input name="estimateMin" type="number" min={5} max={1440} step={5} className="w-28" />

@@ -11,7 +11,6 @@ export type ComposeTask = {
   rawEstimateMin: number;
   calibratedEstimateMin: number;
   dueAt: string | null; // ISO
-  priority: "low" | "normal" | "high";
   deferCount: number;
   /**
    * Hard constraint. A task with this set CANNOT be placed in `overflow` —

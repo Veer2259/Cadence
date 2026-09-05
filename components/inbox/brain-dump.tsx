@@ -19,7 +19,6 @@ type Draft = {
   bucketName: string;
   estimateMin: string;
   dueDate: string;
-  priority: string;
   possibleDuplicateOf: string | null;
 };
 
@@ -31,7 +30,6 @@ function toDraft(t: CapturedTask): Draft {
     bucketName: t.bucketName ?? "",
     estimateMin: t.estimateMin != null ? String(t.estimateMin) : "",
     dueDate: t.dueAt ? t.dueAt.slice(0, 10) : "",
-    priority: t.priority,
     possibleDuplicateOf: t.possibleDuplicateOf,
   };
 }
@@ -95,7 +93,6 @@ export function BrainDump({ buckets }: { buckets: { id: string; name: string }[]
           category: d.category,
           estimateMin: d.estimateMin ? Number(d.estimateMin) : null,
           dueDate: d.dueDate || null,
-          priority: d.priority,
         })),
         });
       } catch (e) {

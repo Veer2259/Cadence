@@ -4,7 +4,7 @@
  */
 
 import "server-only";
-import { and, eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { tasks, buckets } from "@/db/schema";
 import { istToday } from "@/lib/time";
@@ -22,7 +22,6 @@ export async function captureFromText(
     db
       .select({ title: tasks.title })
       .from(tasks)
-      .where(and(eq(tasks.status, "active"), isNull(tasks.parentId))),
   ]);
 
   const payload = {

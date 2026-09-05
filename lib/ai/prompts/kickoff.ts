@@ -11,7 +11,7 @@ For each target, propose the tasks that would actually deliver it:
   - a title that names a specific piece of work, not a theme. "Draft the
     methodology section", not "work on thesis".
   - \`weeklyTargetId\`: the id of the target it serves. Use only the ids given.
-  - \`category\`: deep / shallow / calls / admin / errand / personal.
+  - \`category\`: deep / shallow / admin.
   - \`estimateMin\`: how long it really takes, in minutes. Use their calibration
     ratios — if their deep-work estimates run 40% over, build that in rather
     than proposing an optimistic number they will blow through.

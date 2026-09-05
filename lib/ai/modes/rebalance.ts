@@ -8,7 +8,7 @@
  */
 
 import "server-only";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { tasks, habits, commitments, calibration, type Block } from "@/db/schema";
 import { getCommittedPlan } from "@/lib/plan";
@@ -89,7 +89,6 @@ export async function rebalancePlan(
   const calRows = await db
     .select()
     .from(calibration)
-    .where(eq(calibration.scope, "category"));
   const calByCategory = new Map<string, CategoryRatio>(
     calRows.map((r) => [r.key, { ratio: Number(r.ratio), sampleN: r.sampleN }]),
   );
@@ -115,7 +114,6 @@ export async function rebalancePlan(
         rawEstimateMin: raw,
         calibratedEstimateMin: calibratedMin,
         dueAt: t.dueAt ? t.dueAt.toISOString() : null,
-        priority: t.priority,
         deferCount: t.deferCount,
         mustDoToday: t.mustDoToday,
       };
@@ -211,7 +209,6 @@ export async function rebalancePlan(
           rawEstimateMin: b.rawEstimateMin,
           calibratedEstimateMin: b.estimateMin,
           dueAt: null,
-          priority: "normal",
           deferCount: 0,
           // this stub only exists so the taskId check passes for an already
           // completed block; it is never re-planned, so the flag is moot
@@ -234,7 +231,6 @@ export async function rebalancePlan(
       rawEstimateMin: t.estimateMin ?? DEFAULT_ESTIMATE_MIN,
       calibratedEstimateMin: t.estimateMin ?? DEFAULT_ESTIMATE_MIN,
       dueAt: t.dueAt ? t.dueAt.toISOString() : null,
-      priority: t.priority,
       deferCount: t.deferCount,
       mustDoToday: t.mustDoToday,
     });

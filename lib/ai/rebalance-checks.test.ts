@@ -43,8 +43,8 @@ const ctxBase = {
     commitments: [],
     habitsDue: [],
     tasks: [
-      { id: "t-done", title: "morning deep work", bucket: null, category: "deep", rawEstimateMin: 120, calibratedEstimateMin: 120, dueAt: null, priority: "normal" as const, deferCount: 0, mustDoToday: false },
-      { id: "t-next", title: "afternoon calls", bucket: null, category: "calls", rawEstimateMin: 40, calibratedEstimateMin: 40, dueAt: null, priority: "normal" as const, deferCount: 0, mustDoToday: false },
+      { id: "t-done", title: "morning deep work", bucket: null, category: "deep", rawEstimateMin: 120, calibratedEstimateMin: 120, dueAt: null, deferCount: 0, mustDoToday: false },
+      { id: "t-next", title: "afternoon admin", bucket: null, category: "admin", rawEstimateMin: 40, calibratedEstimateMin: 40, dueAt: null, deferCount: 0, mustDoToday: false },
     ],
     calibration: [],
   } satisfies ComposeInput,
@@ -56,14 +56,14 @@ function plan(blocks: PlanBlock[]): PlanResult {
 
 test("a clean rebalance for the remaining window passes", () => {
   const p = plan([
-    { taskId: "t-next", title: "afternoon calls", start: "14:00", end: "14:40", kind: "task", category: "calls", estimateMin: 40, reason: "remaining calls" },
+    { taskId: "t-next", title: "afternoon admin", start: "14:00", end: "14:40", kind: "task", category: "admin", estimateMin: 40, reason: "remaining admin" },
   ]);
   assert.deepEqual(checkRebalance(p, ctxBase), []);
 });
 
 test("flags a new block that overlaps the completed morning block", () => {
   const p = plan([
-    { taskId: "t-next", title: "afternoon calls", start: "10:30", end: "11:10", kind: "task", category: "calls", estimateMin: 40, reason: "x" },
+    { taskId: "t-next", title: "afternoon admin", start: "10:30", end: "11:10", kind: "task", category: "admin", estimateMin: 40, reason: "x" },
   ]);
   const v = checkRebalance(p, ctxBase);
   assert.ok(v.some((m) => /overlaps the completed block/.test(m)), v.join("; "));
@@ -71,7 +71,7 @@ test("flags a new block that overlaps the completed morning block", () => {
 
 test("flags a new block placed before the replan time", () => {
   const p = plan([
-    { taskId: "t-next", title: "afternoon calls", start: "12:00", end: "12:40", kind: "task", category: "calls", estimateMin: 40, reason: "x" },
+    { taskId: "t-next", title: "afternoon admin", start: "12:00", end: "12:40", kind: "task", category: "admin", estimateMin: 40, reason: "x" },
   ]);
   const v = checkRebalance(p, ctxBase);
   assert.ok(v.some((m) => /before the replan time/.test(m)), v.join("; "));

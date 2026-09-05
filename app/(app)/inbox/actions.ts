@@ -59,7 +59,6 @@ export async function createTask(
     category: t.category,
     estimateMin: t.estimateMin,
     dueAt: t.dueDate ? istEndOfDayToUtc(t.dueDate) : null,
-    priority: t.priority,
     status: holdForReview ? "inbox" : "active",
     source: "manual",
   });
@@ -162,7 +161,6 @@ const confirmSchema = z.object({
           .regex(/^\d{4}-\d{2}-\d{2}$/)
           .nullable()
           .optional(),
-        priority: z.enum(["low", "normal", "high"]).default("normal"),
       }),
     )
     .min(1)
@@ -182,7 +180,6 @@ export async function confirmCapturedTasks(input: unknown): Promise<FormResult> 
       category: t.category,
       estimateMin: t.estimateMin ?? null,
       dueAt: t.dueDate ? istEndOfDayToUtc(t.dueDate) : null,
-      priority: t.priority,
       status: "inbox",
       source: "dump",
     });

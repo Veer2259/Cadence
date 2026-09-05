@@ -22,16 +22,20 @@ you go → debrief → calibration and focus scores improve the next plan.
 
 ## Current state
 
-**Phases 1–5 complete. Phase 6 partial. Phase 7 (see SPEC §12) complete.**
+**Phases 1–7 complete (see SPEC §12).**
 
 Working end to end: auth, inbox and capture, compose, the day ribbon with drag
 and per-block logging, rebalance, debrief with calibration, the deadline
 pressure week view, review charts, the assistant rail with routing, the goal
 layer, breakdown and weekly kickoff, learned focus hours, and the PWA manifest.
 
-**Not built, deliberately:** Google Calendar sync, `.ics` export, `/api/capture`
-for the iOS Shortcut, and the adaptive weekly-reflection *analysis*. Their env
-vars are commented out in `.env.example` — no code reads them.
+**Cut, not deferred:** Google Calendar sync, `.ics` export and `/api/capture`.
+See SPEC §7 for why — sync puts state in two places, which is what killed the
+predecessor system. Their env vars are gone from `.env.example`.
+
+**Not built, deliberately:** the adaptive weekly-reflection *analysis*. The
+capture for it is in place; only the analysis is missing, and it is waiting on
+weeks of real data rather than on code.
 
 Quality gates, all passing: `npx tsc --noEmit`, `npm run lint`, `npm test`
 (116 tests), `npm run build`.
@@ -64,6 +68,27 @@ real Neon database, and migrations `0000`–`0010` are applied there.
 ## Decisions, and why
 
 These were all made deliberately. Please do not silently reverse them.
+
+### The app carries three categories, not six, and no task priority
+
+`calls`, `errand` and `personal` were choices paid for at task entry — on every
+task, every day — and they bought nothing the planner used. They split the
+calibration history into thinner slices without changing where anything went.
+Categories are now `deep | shallow | admin`.
+
+`tasks.priority` is gone for the same reason. Importance is carried by `due_at`,
+`must_do_today`, `defer_count` and the day's bucket emphasis, all of which are
+either facts or a single deliberate act — where priority was a third field to
+set on every capture and a fourth signal for the planner to weigh against them.
+
+Also removed in that pass: subtasks (`tasks.parent_id` — hierarchy lives in
+goal → weekly target → task now), `buckets.priority_hint` (superseded by daily
+bucket emphasis), `buckets.weekly_target_min` (`weekly_targets.target_hours`
+covers it per week and properly), and bucket-scope calibration, which was
+written on every debrief and read by nothing.
+
+All of it was one deletion pass with a fresh baseline migration; there is no
+migration history before `0000` because every earlier row was discarded.
 
 ### Sharp hours were removed and replaced by learned focus hours
 
@@ -208,6 +233,7 @@ Nothing is in progress. Reasonable next steps, roughly in order of value:
    (`time_log.planned_start_at`, `raw_estimate_min`, `energy_level`, `kind`;
    `blocks.logged_at`); only the analysis is missing. Deliberately deferred
    until there is history to analyse.
-4. **Phase 6 remainder** — Google Calendar sync, `.ics` export, `/api/capture`.
+4. **Render the emphasis-honesty line** on Week or Review. The module and its
+   tests are in (`lib/emphasis-honesty.ts`); the query and the panel are not.
 5. **Visual design.** Being taken to Claude Design separately; structural work
    here has avoided cosmetic changes on purpose.

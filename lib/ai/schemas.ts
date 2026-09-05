@@ -12,7 +12,7 @@ const block = z.object({
   start: z.string(), // "HH:mm" IST
   end: z.string(),
   kind: z.enum(["task", "fixed", "habit", "break"]),
-  category: z.enum(["deep", "shallow", "calls", "admin", "errand", "personal"]),
+  category: z.enum(["deep", "shallow", "admin"]),
   estimateMin: z.number().int(),
   reason: z.string().max(90),
 });
@@ -57,8 +57,7 @@ export const captureSchema = z.object({
       ]),
       estimateMin: z.number().int().nullable(),
       dueAt: z.string().nullable(), // ISO
-      priority: z.enum(["low", "normal", "high"]),
-      possibleDuplicateOf: z.string().nullable(),
+        possibleDuplicateOf: z.string().nullable(),
     }),
   ),
   clarifications: z.array(z.string()),
@@ -125,7 +124,7 @@ export const kickoffSchema = z.object({
        * here (SPEC §3: making it a precondition would stop capture happening).
        */
       weeklyTargetId: z.string().nullable(),
-      category: z.enum(["deep", "shallow", "calls", "admin", "errand", "personal"]),
+      category: z.enum(["deep", "shallow", "admin"]),
       estimateMin: z.number().int(),
       /** one line: why this task, and why this size */
       reason: z.string().max(160),

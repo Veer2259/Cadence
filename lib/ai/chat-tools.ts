@@ -7,7 +7,7 @@
  */
 
 import "server-only";
-import { and, eq, gte, inArray, isNull, sql, ilike } from "drizzle-orm";
+import { and, eq, gte, inArray, sql, ilike, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { tasks, buckets, timeLog, habits } from "@/db/schema";
 import { insertTask, resolveBucketId } from "@/lib/tasks";
@@ -25,8 +25,7 @@ import { insertCommitment } from "@/lib/commitments";
 import { emphasisFor, resolveBucketNames, setEmphasis } from "@/lib/emphasis";
 import type { ToolDeclaration } from "@/lib/ai/adapters/types";
 
-const CATEGORY = ["deep", "shallow", "calls", "admin", "errand", "personal"] as const;
-const PRIORITY = ["low", "normal", "high"] as const;
+const CATEGORY = ["deep", "shallow", "admin"] as const;
 const STATUS = ["inbox", "active", "done", "dropped"] as const;
 
 export type ToolResult =
@@ -57,7 +56,6 @@ export const CHAT_TOOLS: ToolDeclaration[] = [
         category: { type: "string", enum: CATEGORY },
         estimateMin: { type: "integer" },
         dueDate: dateField,
-        priority: { type: "string", enum: PRIORITY },
         status: { type: "string", enum: ["inbox", "active"] },
         mustDoToday: {
           type: "boolean",
@@ -85,7 +83,6 @@ export const CHAT_TOOLS: ToolDeclaration[] = [
         category: { type: "string", enum: CATEGORY },
         estimateMin: { type: "integer" },
         dueDate: dateField,
-        priority: { type: "string", enum: PRIORITY },
         status: { type: "string", enum: STATUS },
         mustDoToday: { type: "boolean", description: "see create_task" },
       },
@@ -259,7 +256,6 @@ export async function executeChatTool(
         category: oneOf(args.category, CATEGORY) ?? "shallow",
         estimateMin: num(args.estimateMin) ?? null,
         dueAt: str(args.dueDate) ? istEndOfDayToUtc(str(args.dueDate)!) : null,
-        priority: oneOf(args.priority, PRIORITY) ?? "normal",
         status: oneOf(args.status, ["inbox", "active"] as const) ?? "active",
         mustDoToday: args.mustDoToday === true,
         source: "manual",
@@ -284,7 +280,6 @@ export async function executeChatTool(
       if (str(args.title)) patch.title = str(args.title);
       if (args.notes !== undefined) patch.notes = str(args.notes) ?? null;
       if (oneOf(args.category, CATEGORY)) patch.category = oneOf(args.category, CATEGORY);
-      if (oneOf(args.priority, PRIORITY)) patch.priority = oneOf(args.priority, PRIORITY);
       if (num(args.estimateMin) !== undefined) patch.estimateMin = num(args.estimateMin);
       if (str(args.bucketName) !== undefined)
         patch.bucketId = await resolveBucketId(str(args.bucketName)!);
@@ -308,7 +303,7 @@ export async function executeChatTool(
       const status = oneOf(args.status, STATUS);
       const bucketId = str(args.bucketName) ? await resolveBucketId(str(args.bucketName)!) : undefined;
       const withinDays = num(args.dueWithinDays);
-      const conds = [isNull(tasks.parentId)];
+      const conds: SQL[] = [];
       if (status) conds.push(eq(tasks.status, status));
       else conds.push(inArray(tasks.status, ["inbox", "active"]));
       if (bucketId) conds.push(eq(tasks.bucketId, bucketId));
@@ -323,7 +318,6 @@ export async function executeChatTool(
           status: tasks.status,
           category: tasks.category,
           estimateMin: tasks.estimateMin,
-          priority: tasks.priority,
           deferCount: tasks.deferCount,
           mustDoToday: tasks.mustDoToday,
           dueAt: tasks.dueAt,

@@ -7,7 +7,7 @@ import "server-only";
 import { db } from "@/db";
 import { tasks, buckets } from "@/db/schema";
 
-const CATEGORIES = ["deep", "shallow", "calls", "admin", "errand", "personal"] as const;
+const CATEGORIES = ["deep", "shallow", "admin"] as const;
 type Category = (typeof CATEGORIES)[number];
 
 /** Match a bucket by name (case-insensitive), or null. Never creates a bucket. */
@@ -26,12 +26,11 @@ export type InsertTaskInput = {
   category?: string | null;
   estimateMin?: number | null;
   dueAt?: Date | null;
-  priority?: "low" | "normal" | "high" | null;
   status?: "inbox" | "active";
   mustDoToday?: boolean;
   /** OPTIONAL link to a week's target */
   weeklyTargetId?: string | null;
-  source: "dump" | "manual" | "voice" | "carryover";
+  source: "dump" | "manual" | "carryover";
 };
 
 export async function insertTask(
@@ -53,7 +52,6 @@ export async function insertTask(
       category,
       estimateMin: input.estimateMin ?? null,
       dueAt: input.dueAt ?? null,
-      priority: input.priority ?? "normal",
       status: input.status ?? "active",
       mustDoToday: input.mustDoToday ?? false,
       weeklyTargetId: input.weeklyTargetId ?? null,

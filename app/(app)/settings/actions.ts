@@ -13,10 +13,8 @@ import {
   dayProfileInput,
   bucketGoalInput,
   weeklyTargetInput,
-  bucketTargetInput,
   flattenIssues,
 } from "@/lib/schemas";
-import { setBucketTarget } from "@/lib/bucket-targets";
 
 export type FormResult = { ok: boolean; errors: string[] };
 const OK: FormResult = { ok: true, errors: [] };
@@ -260,16 +258,3 @@ export async function deleteWeeklyTarget(formData: FormData): Promise<void> {
   revalidatePath("/week");
 }
 
-/** Set or clear a bucket's weekly hour target (hours in, minutes stored). */
-export async function saveBucketTarget(formData: FormData): Promise<void> {
-  await requireAuth();
-  const raw = formData.get("targetHours");
-  const parsed = bucketTargetInput.safeParse({
-    bucketId: formData.get("bucketId"),
-    targetHours: raw === "" || raw === null ? null : raw,
-  });
-  if (!parsed.success) throw new Error(flattenIssues(parsed.error).join("; "));
-  await setBucketTarget(parsed.data.bucketId, parsed.data.targetHours);
-  revalidatePath("/settings");
-  revalidatePath("/week");
-}

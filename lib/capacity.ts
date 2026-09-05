@@ -27,7 +27,6 @@ export type BucketCapacity = {
   maxHoursInAWeek: number;
   weeksObserved: number;
   /** the stated weekly intent, if any */
-  targetHoursPerWeek: number | null;
   /** active tasks in this bucket that have been carried at least once */
   deferredTasks: number;
   worstDeferCount: number;
@@ -62,7 +61,6 @@ export async function capacityEvidence(
     .select({
       id: buckets.id,
       name: buckets.name,
-      targetMin: buckets.weeklyTargetMin,
       active: buckets.active,
     })
     .from(buckets);
@@ -117,7 +115,6 @@ export async function capacityEvidence(
         minHoursInAWeek: round1(Math.min(...values)),
         maxHoursInAWeek: round1(Math.max(...values)),
         weeksObserved: weeks,
-        targetHoursPerWeek: b.targetMin != null ? round1(b.targetMin / 60) : null,
         deferredTasks: d?.n ?? 0,
         worstDeferCount: d?.worst ?? 0,
       };
@@ -126,7 +123,6 @@ export async function capacityEvidence(
   const calRows = await db
     .select()
     .from(calibration)
-    .where(eq(calibration.scope, "category"));
 
   const totalLoggedMin = logged.reduce((n, l) => n + l.durationMin, 0);
 

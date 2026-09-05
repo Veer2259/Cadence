@@ -91,7 +91,6 @@ export async function computePressure(now = new Date()): Promise<PressureResult>
   const calRows = await db
     .select()
     .from(calibrationTable)
-    .where(eq(calibrationTable.scope, "category"));
   const calByCategory = new Map<string, CategoryRatio>(
     calRows.map((r) => [r.key, { ratio: Number(r.ratio), sampleN: r.sampleN }]),
   );
@@ -103,23 +102,10 @@ export async function computePressure(now = new Date()): Promise<PressureResult>
     .where(
       and(
         eq(tasks.status, "active"),
-        sql`${tasks.parentId} is null`,
         sql`${tasks.dueAt} is not null`,
         lte(tasks.dueAt, horizonEnd),
       ),
     );
-
-  const allActive = await db
-    .select({ id: tasks.id, parentId: tasks.parentId, category: tasks.category, estimateMin: tasks.estimateMin })
-    .from(tasks)
-    .where(eq(tasks.status, "active"));
-  const subByParent = new Map<string, typeof allActive>();
-  for (const t of allActive) {
-    if (!t.parentId) continue;
-    const arr = subByParent.get(t.parentId) ?? [];
-    arr.push(t);
-    subByParent.set(t.parentId, arr);
-  }
 
   const bucketRows = await db.query.buckets.findMany();
   const bucketName = new Map(bucketRows.map((b) => [b.id, b.name]));
@@ -129,16 +115,7 @@ export async function computePressure(now = new Date()): Promise<PressureResult>
       t.estimateMin ?? FALLBACK_ESTIMATE_MIN,
       calByCategory.get(t.category),
     ).calibratedMin;
-    const subs = (subByParent.get(t.id) ?? []).reduce(
-      (n, s) =>
-        n +
-        applyCalibration(
-          s.estimateMin ?? FALLBACK_ESTIMATE_MIN,
-          calByCategory.get(s.category),
-        ).calibratedMin,
-      0,
-    );
-    return (own + subs) / 60;
+    return own / 60;
   }
 
   // --- free hours per IST day, today .. furthest due date (bounded by horizon) ---

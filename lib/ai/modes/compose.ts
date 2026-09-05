@@ -7,7 +7,7 @@
  */
 
 import "server-only";
-import { and, eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { tasks, commitments, habits, calibration } from "@/db/schema";
 import { getOrCreateDayProfile } from "@/lib/day-profile";
@@ -66,7 +66,6 @@ export async function buildComposeInput(
   const calRows = await db
     .select()
     .from(calibration)
-    .where(eq(calibration.scope, "category"));
   const calByCategory = new Map<string, CategoryRatio>(
     calRows.map((r) => [r.key, { ratio: Number(r.ratio), sampleN: r.sampleN }]),
   );
@@ -108,7 +107,6 @@ export async function buildComposeInput(
   const activeTasks = await db
     .select()
     .from(tasks)
-    .where(and(eq(tasks.status, "active"), isNull(tasks.parentId)));
 
   const composeTasks: ComposeTask[] = activeTasks.map((t) => {
     const raw = t.estimateMin ?? DEFAULT_ESTIMATE_MIN;
@@ -124,7 +122,6 @@ export async function buildComposeInput(
       rawEstimateMin: raw,
       calibratedEstimateMin: calibratedMin,
       dueAt: t.dueAt ? t.dueAt.toISOString() : null,
-      priority: t.priority,
       deferCount: t.deferCount,
       mustDoToday: t.mustDoToday,
     };
@@ -212,9 +209,9 @@ const USER_INSTRUCTION = [
   "",
   "When `focusHoursKnown` is false there is not yet enough history to know when",
   "this person focuses well. Do NOT assume mornings or any other default. Place",
-  "deep work on the other signals alone — deadline pressure, priority, must-do,",
-  "and goal pressure — and say plainly in the calibrationNote that focus hours",
-  "are not yet known, so placement used deadlines and priority instead.",
+  "deep work on the other signals alone — deadline pressure, must-do, defer",
+  "count and goal pressure — and say plainly in the calibrationNote that focus",
+  "hours are not yet known, so placement used deadlines instead.",
   "",
   "Before putting anything in `overflow`, total the unscheduled minutes left in",
   "the working windows. If the task fits in that time it is NOT overflow, whatever",

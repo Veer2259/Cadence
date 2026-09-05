@@ -5,19 +5,10 @@
 
 import { z } from "zod";
 
-export const CATEGORIES = [
-  "deep",
-  "shallow",
-  "calls",
-  "admin",
-  "errand",
-  "personal",
-] as const;
-export const PRIORITIES = ["low", "normal", "high"] as const;
+export const CATEGORIES = ["deep", "shallow", "admin"] as const;
 export const TASK_STATUSES = ["inbox", "active", "done", "dropped"] as const;
 
 export const zCategory = z.enum(CATEGORIES);
-export const zPriority = z.enum(PRIORITIES);
 
 const hex = z
   .string()
@@ -38,7 +29,6 @@ export const bucketInput = z.object({
     .max(40)
     .regex(/^[a-z0-9][a-z0-9 _-]*$/, "Lowercase letters, numbers, spaces, - and _"),
   color: hex,
-  priorityHint: z.string().trim().max(120).nullish().transform((v) => v || null),
   active: z.boolean().default(true),
 });
 export type BucketInput = z.infer<typeof bucketInput>;
@@ -66,7 +56,6 @@ export const taskInput = z.object({
     .nullish()
     .transform((v) => v ?? null),
   dueDate: ymd.nullish().transform((v) => v || null),
-  priority: zPriority.default("normal"),
   weeklyTargetId: optionalUuid,
 });
 export type TaskInput = z.infer<typeof taskInput>;
@@ -151,12 +140,6 @@ export const weeklyTargetInput = z.object({
     .transform((v) => (v == null || Number.isNaN(v) ? null : v)),
 });
 export type WeeklyTargetInput = z.infer<typeof weeklyTargetInput>;
-
-/** Weekly target hours for a bucket. Empty clears it. */
-export const bucketTargetInput = z.object({
-  bucketId: z.string().uuid(),
-  targetHours: z.coerce.number().min(0).max(168).nullish().transform((v) => (v == null ? null : Math.round(v * 60))),
-});
 
 /* ------------------------------------------------------------------ */
 /*  Day profile                                                       */

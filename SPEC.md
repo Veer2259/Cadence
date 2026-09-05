@@ -106,8 +106,6 @@ Projects or life areas. The user creates and retires these freely.
 | name | text unique | e.g. lowercase slug style, user's choice |
 | color | text | hex |
 | active | boolean default true | retired buckets keep their history |
-| priority_hint | text nullable | free text passed to the planner, e.g. "weekday priority" |
-| weekly_target_min | integer nullable | intended hours per week, in minutes. Intent only — nothing schedules against it |
 | outcome | text nullable | **the guiding star**: what "done" looks like, one sentence |
 | outcome_target_date | date nullable | when the outcome is meant to be true by |
 | status | enum | `active` | `achieved` | `abandoned` — set by hand, never inferred |
@@ -128,14 +126,12 @@ field.
 | title | text | |
 | notes | text nullable | |
 | bucket_id | uuid fk nullable | |
-| category | enum | `deep` \| `shallow` \| `calls` \| `admin` \| `errand` \| `personal` |
+| category | enum | `deep` \| `shallow` \| `admin` |
 | estimate_min | integer nullable | the user's or the model's raw estimate, uncalibrated |
 | due_at | timestamptz nullable | |
-| priority | enum | `low` \| `normal` \| `high` |
 | status | enum | `inbox` \| `active` \| `done` \| `dropped` |
-| parent_id | uuid fk nullable | self-reference for subtasks, one level only |
 | defer_count | integer default 0 | incremented whenever a task is carried past its planned day |
-| source | enum | `dump` \| `manual` \| `voice` \| `carryover` |
+| source | enum | `dump` \| `manual` \| `carryover` |
 | created_at, completed_at | timestamptz | |
 
 `inbox` means captured but not yet confirmed by the user. Only `active` tasks are eligible for planning.
@@ -159,8 +155,8 @@ Things that cannot move. Meetings, classes, appointments.
 | title | text | |
 | start_at, end_at | timestamptz | |
 | recurrence | text nullable | RRULE string, keep support minimal: daily/weekly-by-day |
-| source | enum | `manual` \| `gcal` |
-| gcal_event_id | text nullable | |
+| source | enum | `manual` \| `timetable` |
+| timetable_import_id | uuid fk nullable | set when a timetable import created this row |
 
 ### `weekly_targets`
 One week's slice of a bucket's outcome — the layer between "what I am trying to
@@ -281,13 +277,12 @@ derivable from `date`.
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid pk | |
-| scope | enum | `category` \| `bucket` |
-| key | text | the category name or bucket id |
+| key | text | the category name |
 | ratio | numeric(4,2) | actual ÷ estimate, exponentially weighted |
 | sample_n | integer | |
 | updated_at | timestamptz | |
 
-Unique on `(scope, key)`.
+Unique on `key`. Category is the only scope.
 
 ### `day_profile`
 Singleton row. Enforce with a `CHECK (id = 1)` integer primary key.
@@ -377,7 +372,9 @@ new_ratio = (alpha * sample) + ((1 - alpha) * old_ratio)
 
 Seed `ratio = 1.0, sample_n = 0` on first sight of a scope key. Increment `sample_n` on every update.
 
-Maintain both `category` and `bucket` scopes. Category is the primary signal; bucket is shown in the review screen but not applied to estimates.
+Category is the only scope. Bucket-scope ratios were computed on every debrief
+and read by nothing — every consumer already filtered to the category rows — so
+they were write-only and are gone.
 
 **Applying.** When composing a plan:
 
@@ -502,7 +499,7 @@ tier is ~5 requests/minute on the compose model.
   "tasks": [{
     "id":"...","title":"...","bucket":"...","category":"deep",
     "rawEstimateMin":90,"calibratedEstimateMin":126,
-    "dueAt":"2026-09-03T12:00:00Z","priority":"high","deferCount":2,
+    "dueAt":"2026-09-03T12:00:00Z","deferCount":2,
     "mustDoToday": false,
     "goal": {                       // present ONLY when the task's weekly
       "bucket":"thesis",            // target is behind pace; absent otherwise
@@ -547,14 +544,15 @@ Rules, in priority order:
    calibrated number already accounts for this person's demonstrated tendency to
    under- or over-estimate.
 3. Place work in the category-appropriate hours. Cognitively heavy work
-   (category "deep") belongs inside the sharp hours. Calls, admin and errands
-   belong outside them. Never fragment a deep block below 45 minutes.
+   (category "deep") belongs inside the sharp hours. Admin belongs outside them,
+   and shallow work can go either side of them. Never fragment a deep block
+   below 45 minutes.
 4. Cluster same-category tasks adjacently to reduce context switching.
 5. Insert a break between two consecutive deep blocks.
 6. Respect the daily cap. Time inside fixed commitments counts toward it.
-7. Weigh deadline pressure, priority, and deferCount together. A task deferred
-   three or more times is either genuinely important and being avoided, or it is
-   not real — schedule it early in the day or say plainly in the overflow reason
+7. Weigh deadline pressure and deferCount together. A task deferred three or
+   more times is either genuinely important and being avoided, or it is not
+   real — schedule it early in the day or say plainly in the overflow reason
    that it should be dropped.
 8. Do not overfill. If the work exceeds the hours, put the surplus in `overflow`
    with an honest reason and a concrete recommended action. Never compress
@@ -583,7 +581,7 @@ const block = z.object({
   start: z.string(),          // "HH:mm" IST
   end: z.string(),
   kind: z.enum(["task","fixed","habit","break"]),
-  category: z.enum(["deep","shallow","calls","admin","errand","personal"]),
+  category: z.enum(["deep","shallow","admin"]),
   estimateMin: z.number().int(),
   reason: z.string().max(90),
 });
@@ -608,7 +606,7 @@ export const planSchema = z.object({
 
 Input: raw text. Output: an array of parsed tasks plus optional clarifying questions.
 
-The prompt should: split the dump into discrete concrete tasks, merge obvious duplicates against the existing active task list (pass the titles in), infer bucket from the existing bucket list only (never invent a bucket — return `null` and let the user assign), infer category, infer a due date from natural language relative to today, and give a first-pass estimate.
+The prompt should: split the dump into discrete concrete tasks, merge obvious duplicates against the existing active task list (pass the titles in), infer bucket from the existing bucket list only (never invent a bucket — return `null` and let the user assign), infer category (one of three: deep, shallow, admin), infer a due date from natural language relative to today, and give a first-pass estimate.
 
 Coaching depth differs by input shape. A concrete task ("call the mill about sampling") gets captured with no questions. A goal ("get the Raahat pilot moving") gets one to three probing questions before anything is written — what does done look like, by when, what is the first physical action. Return questions in `clarifications`; do not write to the database until the user answers or explicitly skips.
 
@@ -620,10 +618,9 @@ export const captureSchema = z.object({
     title: z.string(),
     notes: z.string().nullable(),
     bucketName: z.string().nullable(),
-    category: z.enum(["deep","shallow","calls","admin","errand","personal"]),
+    category: z.enum(["deep","shallow","admin"]),
     estimateMin: z.number().int().nullable(),
     dueAt: z.string().nullable(),     // ISO
-    priority: z.enum(["low","normal","high"]),
     possibleDuplicateOf: z.string().nullable(),
   })),
   clarifications: z.array(z.string()),
@@ -717,23 +714,33 @@ target. Like breakdown it **never writes** — candidates go to a review list
 with a keep/discard checkbox on each. Candidates pointing at a target id that
 was not supplied are dropped in code before the person ever sees them.
 
-## 7. Google Calendar
+## 7. Calendar sync — CUT, not deferred
 
-OAuth 2.0, offline access, refresh token stored encrypted in a `settings` table.
+Google Calendar two-way sync, `.ics` export and the `/api/capture` endpoint were
+specified here and are now abandoned. Nothing was built; nothing is coming.
 
-**Read:** pull events from the user's primary calendar for the planning horizon into `commitments` with `source='gcal'`. Sync on demand and via a Vercel cron every 30 minutes.
+**Why sync was cut.** It reintroduces state in two places. Principle 1 says the
+database is the only source of truth, and that principle is not decoration — it
+is there because the predecessor system died of exactly this: state living in a
+task manager, a calendar and a spreadsheet, drifting apart until none of them
+could be trusted. A two-way sync means every commitment has two homes and a
+reconciliation rule, and the first time they disagree the plan is worthless.
 
-**Write:** on plan commit, write blocks to a **separate dedicated calendar** named "Cadence" that the app creates on first connect. Never write to the primary calendar — the user must be able to toggle the whole layer off in one click. Store `gcal_event_id` on each block. On supersede, delete the old events.
+Classes and other fixed commitments arrive by timetable PDF import instead
+(section 6.9). That is a one-way write into `commitments` from a document the
+person supplies, reviewed before it lands — one source of truth, no daemon, no
+refresh token, no drift.
 
-Keep `.ics` export of a single day as a fallback for when OAuth is not connected.
+`.ics` export was the fallback for when OAuth was not connected; with no OAuth
+there is nothing to fall back from. `/api/capture` was a bearer-token endpoint
+for an iOS Shortcut; the assistant rail already accepts typed capture from a
+phone, which is the same job without a second auth path.
 
 ---
 
 ## 8. Auth
 
-One user. A single passphrase in `APP_PASSPHRASE`, compared with a timing-safe comparison, setting an httpOnly signed cookie valid for 30 days. Middleware protects everything except `/login` and `/api/capture`.
-
-`/api/capture` authenticates with a separate bearer token in `CAPTURE_TOKEN`, so an iOS Shortcut can POST dictated text without a session.
+One user. A single passphrase in `APP_PASSPHRASE`, compared with a timing-safe comparison, setting an httpOnly signed cookie valid for 30 days. Middleware protects everything except `/login`.
 
 Do not add OAuth providers, user tables, or role logic.
 
@@ -824,21 +831,21 @@ checks re-run and any new conflict is shown, but the move is always kept: see
 
 ```
 DATABASE_URL=
-LLM_PROVIDER=            # "gemini" (active) | "anthropic"
-GEMINI_API_KEY=         # when LLM_PROVIDER=gemini
-ANTHROPIC_API_KEY=      # when LLM_PROVIDER=anthropic
-# optional per-role model pins: GEMINI_COMPOSE_MODEL, GEMINI_CAPTURE_MODEL,
-#   ANTHROPIC_COMPOSE_MODEL, ANTHROPIC_CAPTURE_MODEL
+LLM_PROVIDER=            # "anthropic" (active) | "gemini"
+ANTHROPIC_API_KEY=       # when LLM_PROVIDER=anthropic
+GEMINI_API_KEY=          # when LLM_PROVIDER=gemini
+# optional per-role model pins: ANTHROPIC_COMPOSE_MODEL, ANTHROPIC_CAPTURE_MODEL,
+#   ANTHROPIC_REASON_MODEL, GEMINI_COMPOSE_MODEL, GEMINI_CAPTURE_MODEL
 APP_PASSPHRASE=
 SESSION_SECRET=
-CAPTURE_TOKEN=
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=
-ENCRYPTION_KEY=          # for the stored refresh token
 ```
 
-Include `.env.example` with every key and a one-line comment. Include a `README.md` covering: Neon setup, running migrations, Google Cloud console steps for the OAuth client, Vercel env var configuration, and the redirect URI that must be registered for both local and production.
+That is the whole list. There is no `CAPTURE_TOKEN`, no `GOOGLE_*` and no
+`ENCRYPTION_KEY` — see section 7.
+
+Include `.env.example` with every key and a one-line comment. Include a
+`README.md` covering: Neon setup, running migrations, and Vercel env var
+configuration.
 
 ---
 
@@ -868,12 +875,13 @@ Rebalance mode with completed-block preservation, the persistent assistant with 
 The pressure algorithm with earliest-due-first allocation, the week screen, the review charts.
 *Done when:* the pressure view does not double-count free hours across competing deadlines.
 
-**Phase 6 — Calendar, PWA, capture endpoint. PARTIALLY DONE.**
-Google Calendar two-way sync, `.ics` export, PWA manifest and icons, `/api/capture` for the iOS Shortcut.
-*Done:* PWA manifest and icons — the app installs to the home screen and opens
-on `/today`.
-*Not built:* Google Calendar sync, `.ics` export, `/api/capture`. Their env vars
-are commented out in `.env.example`; no code reads them.
+**Phase 6 — PWA. DONE.**
+PWA manifest and icons — the app installs to the home screen and opens on
+`/today`.
+
+Google Calendar sync, `.ics` export and `/api/capture` were originally part of
+this phase. They are CUT, not deferred — see section 7 for why. Their env vars
+are gone from `.env.example`.
 
 **Phase 7 — The goal layer and the learned loop. DONE.**
 Built after Phase 5, in response to using the app rather than to this plan.

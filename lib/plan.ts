@@ -400,7 +400,7 @@ export async function placeHabitBlock(args: {
     endAt,
     kind: "habit",
     title,
-    category: "personal",
+    category: "shallow",
     reason: reason.slice(0, 90),
     estimateMin: endMin - startMin,
     rawEstimateMin: args.durationMin,

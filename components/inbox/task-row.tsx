@@ -6,7 +6,7 @@ import {
   toggleMustDoToday,
   deleteTask,
 } from "@/app/(app)/inbox/actions";
-import { CATEGORIES, PRIORITIES } from "@/lib/schemas";
+import { CATEGORIES } from "@/lib/schemas";
 import { Button, Input, Labeled, Select, Textarea } from "@/components/ui/controls";
 import { useEditorForm } from "@/components/ui/use-editor-form";
 
@@ -29,7 +29,6 @@ export type TaskView = {
   title: string;
   notes: string | null;
   category: string;
-  priority: string;
   status: "inbox" | "active" | "done" | "dropped";
   mustDoToday: boolean;
   weeklyTargetId: string | null;
@@ -79,7 +78,6 @@ export function TaskRow({
   const meta = [
     task.category,
     task.estimateMin ? `${task.estimateMin}m` : "no est.",
-    task.priority !== "normal" ? task.priority : null,
     task.dueLabel ? `due ${task.dueLabel}` : null,
     task.deferCount > 0 ? `deferred ${task.deferCount}×` : null,
     task.weeklyTargetName ? `→ ${task.weeklyTargetName}` : null,
@@ -212,16 +210,6 @@ export function TaskRow({
               {targets.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
-                </option>
-              ))}
-            </Select>
-          </Labeled>
-
-          <Labeled label="Priority">
-            <Select name="priority" defaultValue={task.priority}>
-              {PRIORITIES.map((p) => (
-                <option key={p} value={p}>
-                  {p}
                 </option>
               ))}
             </Select>
