@@ -69,6 +69,23 @@ real Neon database, and migrations `0000`–`0010` are applied there.
 
 These were all made deliberately. Please do not silently reverse them.
 
+### Overflow is actionable, and the assistant is how
+
+An overflow row says "there was no room today" and recommends an action. That
+recommendation was rendered as a dark pill at a 38px tap target and was a `<p>`
+— it looked exactly like a button and did nothing at all. It is a real button
+now, and tapping it opens the assistant with the instruction already written.
+
+`schedule_task` is what carries it out: it puts an existing task on a chosen
+day's plan, moving the block if one is already there, and clears the matching
+overflow row — a task is a block OR an overflow row, never both.
+
+The action word (MOVE / DROP / …) is styled as a label rather than a pill,
+because it describes what the planner recommends and cannot be tapped.
+
+`get_plan` now returns overflow WITH task titles. Without them the assistant
+could see that something had overflowed but not what, so it could not act on it.
+
 ### The assistant is the app; the two chat windows are one
 
 There used to be two sheets — a capture sheet on the tab bar's + and a chat

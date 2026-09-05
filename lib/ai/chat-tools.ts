@@ -605,11 +605,24 @@ export async function executeChatTool(
             // will actually match rather than making the model guess.
             adjustBy: b.title,
           })),
-          overflow: live.overflow.map((o) => ({
-            reason: o.reason,
-            action: o.action,
-            suggestion: o.suggestion,
-          })),
+          // The TITLE matters: without it the assistant can see that something
+          // overflowed but not what, so it cannot act on the suggestion.
+          overflow: await (async () => {
+            if (live.overflow.length === 0) return [];
+            const ids = live.overflow.map((o) => o.taskId);
+            const rows = await db
+              .select({ id: tasks.id, title: tasks.title })
+              .from(tasks)
+              .where(inArray(tasks.id, ids));
+            const titleById = new Map(rows.map((r) => [r.id, r.title]));
+            return live.overflow.map((o) => ({
+              title: titleById.get(o.taskId) ?? "(unknown task)",
+              reason: o.reason,
+              action: o.action,
+              suggestion: o.suggestion,
+              scheduleWith: "schedule_task",
+            }));
+          })(),
           note:
             "Blocks already done or partial are a record of what happened — " +
             "move or drop them only if the person explicitly says to.",

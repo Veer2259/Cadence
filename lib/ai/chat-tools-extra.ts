@@ -16,15 +16,15 @@
 import "server-only";
 import { desc, eq, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
-import { buckets, habits, plans, weeklyTargets } from "@/db/schema";
-import { getLivePlan, logBlockStatus } from "@/lib/plan";
+import { buckets, habits, plans, tasks, weeklyTargets } from "@/db/schema";
+import { getLivePlan, logBlockStatus, placeTaskBlock } from "@/lib/plan";
 import { getPlanToDebrief } from "@/lib/debrief";
 import { recordEnergy } from "@/lib/energy-db";
 import { computeReview } from "@/lib/review";
 import { loadFocusScores } from "@/lib/focus-db";
 import { weeklyTargetsFor, weekStartOf } from "@/lib/goals";
 import { captureFromText } from "@/lib/ai/modes/capture";
-import { istMinutesOfDay, istToday, minutesToHm } from "@/lib/time";
+import { hmToMinutes, istMinutesOfDay, istToday, minutesToHm } from "@/lib/time";
 import type { ToolDeclaration } from "@/lib/ai/adapters/types";
 import type { ToolResult } from "@/lib/ai/chat-tools";
 
@@ -52,6 +52,26 @@ export const EXTRA_CHAT_TOOLS: ToolDeclaration[] = [
         },
       },
       required: ["text"],
+    },
+  },
+  {
+    name: "schedule_task",
+    description:
+      "Put an existing task on a day's plan at a time. This is how an OVERFLOW " +
+      "item gets dealt with — overflow means there was no room that day, and the " +
+      "fix is to place it on another one. Also moves a task already blocked on " +
+      "that day. Executes immediately. The day must already have a plan; if it " +
+      "does not, say so and offer to build one.",
+    parameters: {
+      type: "object",
+      properties: {
+        taskTitleContains: { type: "string" },
+        date: { ...dateField, description: "the day to put it on; default: today" },
+        start: { type: "string", description: "IST clock time, HH:mm" },
+        end: { type: "string", description: "HH:mm; defaults to start + the estimate" },
+        reason: { type: "string", description: "one line, why it is in that slot" },
+      },
+      required: ["taskTitleContains", "start"],
     },
   },
   {
@@ -306,6 +326,71 @@ export async function executeExtraChatTool(
     }
 
     /* ---------------- the day ---------------- */
+    case "schedule_task": {
+      const q = str(args.taskTitleContains);
+      const start = str(args.start);
+      if (!q || !start) {
+        return { result: { error: "taskTitleContains and start (HH:mm) are required" } };
+      }
+      const date = str(args.date) ?? istToday();
+
+      // Search EVERY status, not just the open ones. A bare "no open task
+      // matching X" when the task exists but is done reads as "it does not
+      // exist", and the model's recovery from that is to create a duplicate —
+      // which is exactly what happened the first time this ran.
+      const all = await db.select().from(tasks);
+      const named = all.filter((t) => t.title.toLowerCase().includes(q.toLowerCase()));
+      if (named.length === 0) {
+        return { result: { error: `no task at all matching "${q}"` } };
+      }
+      const open = named.filter((t) => t.status === "inbox" || t.status === "active");
+      if (open.length === 0) {
+        const t = named[0];
+        return {
+          result: {
+            error: `"${t.title}" exists but is ${t.status}, so it cannot be scheduled.`,
+            hint:
+              "Reopen it with update_task (status: active) if that is what they " +
+              "meant. Do NOT create a new task with the same title.",
+          },
+        };
+      }
+      if (open.length > 1) {
+        return { result: { error: "multiple matches", matches: open.map((t) => t.title) } };
+      }
+      const task = open[0];
+
+      const startMin = hmToMinutes(start);
+      const raw = task.estimateMin ?? 30;
+      const endStr = str(args.end);
+      const endMin = endStr ? hmToMinutes(endStr) : startMin + raw;
+
+      const res = await placeTaskBlock({
+        dateStr: date,
+        taskId: task.id,
+        title: task.title,
+        category: task.category,
+        rawEstimateMin: raw,
+        startMin,
+        endMin,
+        reason: str(args.reason) ?? "You asked for it in this slot.",
+      });
+      if (!res.ok) return { result: { error: res.error } };
+      return {
+        result: {
+          scheduled: task.title,
+          date,
+          start: minutesToHm(startMin),
+          end: minutesToHm(endMin),
+          moved: res.moved === true,
+          violations: res.violations,
+          note:
+            "If it was in overflow, it no longer is — a task is a block or an " +
+            "overflow row, never both.",
+        },
+      };
+    }
+
     case "log_block_status": {
       const q = str(args.blockTitleContains);
       const status = oneOf(args.status, ["planned", "done", "partial", "skipped"] as const);

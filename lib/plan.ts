@@ -399,6 +399,87 @@ export async function placeHabitBlock(args: {
  * the task still has a trace and a reason. This is the path that once lost a
  * task silently — with twenty in flight, nobody would have noticed.
  */
+/**
+ * Put an existing TASK on a day's plan as a block.
+ *
+ * This is what makes an overflow row actionable. Overflow means "there was no
+ * room today", and the recommended action is nearly always "do it on some other
+ * day" — but until now nothing could carry it out: the assistant could create a
+ * task or move a block that already existed, and neither is the same as putting
+ * a known task onto a chosen day.
+ *
+ * If the task is already blocked on that day the existing block is MOVED rather
+ * than a second one added, mirroring placeHabitBlock. A block already done or
+ * partial is a record and is never moved.
+ *
+ * Clearing the matching overflow row is deliberate: the task now has a block,
+ * and the plan invariant says a task is a block OR an overflow row, never both.
+ */
+export async function placeTaskBlock(args: {
+  dateStr: string;
+  taskId: string;
+  title: string;
+  category: string;
+  rawEstimateMin: number;
+  startMin: number;
+  endMin: number;
+  reason: string;
+}): Promise<BlockEditResult & { moved?: boolean }> {
+  const { dateStr, taskId, title, reason } = args;
+  const live = await getLivePlan(dateStr);
+  if (!live) {
+    return {
+      ok: false,
+      error: `There is no plan on ${dateStr} yet — build one for that day first, or set the task's due date instead.`,
+    };
+  }
+  if (live.plan.debriefedAt) {
+    return { ok: false, error: `${dateStr} is already closed out.` };
+  }
+
+  const startMin = snap5(args.startMin);
+  const endMin = Math.max(startMin + 5, snap5(args.endMin));
+  const startAt = istDayInstant(dateStr, minutesToHm(startMin));
+  const endAt = istDayInstant(dateStr, minutesToHm(endMin));
+
+  const existing = live.blocks.find((b) => b.kind === "task" && b.taskId === taskId);
+  if (existing) {
+    if (existing.status === "done" || existing.status === "partial") {
+      return {
+        ok: false,
+        error: `"${title}" is already marked ${existing.status} on ${dateStr} — leaving it where it is.`,
+      };
+    }
+    await db
+      .update(blocks)
+      .set({ startAt, endAt, estimateMin: endMin - startMin })
+      .where(eq(blocks.id, existing.id));
+    return { ...(await finishBlockEdit(dateStr, live.plan.id)), moved: true };
+  }
+
+  await db.insert(blocks).values({
+    planId: live.plan.id,
+    taskId,
+    habitId: null,
+    startAt,
+    endAt,
+    kind: "task",
+    title,
+    category: args.category as "deep" | "shallow" | "admin",
+    reason: reason.slice(0, 90),
+    estimateMin: endMin - startMin,
+    rawEstimateMin: args.rawEstimateMin,
+    status: "planned",
+  });
+
+  // The task is on the plan now, so it must not also sit in overflow.
+  await db
+    .delete(overflow)
+    .where(and(eq(overflow.planId, live.plan.id), eq(overflow.taskId, taskId)));
+
+  return { ...(await finishBlockEdit(dateStr, live.plan.id)), moved: false };
+}
+
 export async function dropPlanBlock(args: {
   dateStr: string;
   blockId: string;

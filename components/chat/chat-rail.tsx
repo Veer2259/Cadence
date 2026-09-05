@@ -104,18 +104,21 @@ function CaptureCard({
 export function ChatPanel({
   initial,
   startInDumpMode = false,
+  draft = "",
   bucketNames = [],
 }: {
   initial: ChatMsg[];
   /** the tab bar's + opens straight into brain-dump mode */
   startInDumpMode?: boolean;
+  /** prefilled instruction, e.g. from an overflow suggestion */
+  draft?: string;
   bucketNames?: string[];
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<Msg[]>(
     initial.map((m, i) => ({ ...m, id: `init-${i}` })),
   );
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(draft);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   /**
