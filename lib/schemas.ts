@@ -194,6 +194,63 @@ export const dayProfileInput = z
   });
 export type DayProfileInput = z.infer<typeof dayProfileInput>;
 
+/* -------------------------------------------------------------------------- */
+/*  Timetable import                                                          */
+/* -------------------------------------------------------------------------- */
+
+export const EXAM_KINDS = ["mid_block", "end_block", "other"] as const;
+
+/**
+ * One parsed session from a timetable PDF.
+ *
+ * `date` is nullable ON PURPOSE. A session the model could not date is a PARSE
+ * FAILURE, not something to fill in from the current week or a day-of-week
+ * guess — a class placed on the wrong date corrupts every plan built on top of
+ * it. Null here blocks confirmation for that row; nothing downstream is allowed
+ * to invent one.
+ */
+export const timetableSession = z.object({
+  /** IST calendar date READ FROM THE PDF, or null when it could not be read */
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  /** IST clock times, HH:mm */
+  start: hm.nullable(),
+  end: hm.nullable(),
+  title: z.string().min(1).max(200),
+  /** subject code as printed, when there is one */
+  subjectCode: z.string().max(40).nullable(),
+  location: z.string().max(200).nullable(),
+  /** true when the instruction says this one is not taken */
+  excluded: z.boolean(),
+  /** why it was excluded, or why it was kept when that was a judgement call */
+  reason: z.string().max(300).nullable(),
+  /** the model was unsure — surfaced for review rather than quietly accepted */
+  uncertain: z.boolean().default(false),
+});
+export type TimetableSession = z.infer<typeof timetableSession>;
+
+export const timetableExam = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  start: hm.nullable(),
+  end: hm.nullable(),
+  subjectCode: z.string().max(40),
+  subjectName: z.string().max(200).nullable(),
+  kind: z.enum(EXAM_KINDS),
+  location: z.string().max(200).nullable(),
+  title: z.string().max(200),
+  uncertain: z.boolean().default(false),
+});
+export type TimetableExam = z.infer<typeof timetableExam>;
+
+export const timetableParse = z.object({
+  sessions: z.array(timetableSession).max(400),
+  exams: z.array(timetableExam).max(50),
+  /** anything the model wants the person to check before confirming */
+  warnings: z.array(z.string().max(300)).max(30),
+  /** what the sheet says the term/block is, verbatim */
+  termLabel: z.string().max(200).nullable(),
+});
+export type TimetableParse = z.infer<typeof timetableParse>;
+
 /** Small helper: flatten a ZodError into "field: message" strings for the UI. */
 export function flattenIssues(err: z.ZodError): string[] {
   return err.issues.map((i) => {

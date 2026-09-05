@@ -85,6 +85,13 @@
       "when": 1788590038532,
       "tag": "0011_bucket_emphasis",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788592079321,
+      "tag": "0012_timetable_and_exams",
+      "breakpoints": true
     }
   ]
 }

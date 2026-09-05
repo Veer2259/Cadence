@@ -14,6 +14,7 @@ import {
   check,
   date,
   index,
+  unique,
   integer,
   jsonb,
   numeric,
@@ -55,7 +56,15 @@ export const taskSourceEnum = pgEnum("task_source", [
   "carryover",
 ]);
 
-export const commitmentSourceEnum = pgEnum("commitment_source", ["manual", "gcal"]);
+export const commitmentSourceEnum = pgEnum("commitment_source", [
+  "manual",
+  "gcal",
+  /** created by a timetable PDF import — replaceable, unlike a manual one */
+  "timetable",
+]);
+
+/** Which assessment an exam is. Taken from the timetable, never inferred. */
+export const examKindEnum = pgEnum("exam_kind", ["mid_block", "end_block", "other"]);
 
 export const planStatusEnum = pgEnum("plan_status", [
   "draft",
@@ -194,7 +203,85 @@ export const commitments = pgTable("commitments", {
   recurrence: text("recurrence"),
   source: commitmentSourceEnum("source").notNull().default("manual"),
   gcalEventId: text("gcal_event_id"),
+  /**
+   * The timetable import that created this row, when source = "timetable".
+   *
+   * Re-importing replaces previously imported commitments whose dates overlap
+   * the new range. A manually created commitment has no import id and is never
+   * touched — that separation is the whole point of storing this.
+   */
+  timetableImportId: uuid("timetable_import_id").references(
+    (): AnyPgColumn => timetableImports.id,
+    { onDelete: "set null" },
+  ),
 });
+
+/**
+ * One upload of a timetable PDF.
+ *
+ * Keeps the date range the import covers, so a later import knows exactly which
+ * previously imported rows it supersedes, and the free-text instruction, so the
+ * reasoning behind an exclusion is still readable months later — the same
+ * argument as buckets.breakdown_transcript.
+ */
+export const timetableImports = pgTable("timetable_imports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  importedAt: timestamp("imported_at", { withTimezone: true }).notNull().defaultNow(),
+  fileName: text("file_name"),
+  /** the free-text instruction sent to the model with the PDF */
+  instruction: text("instruction"),
+  /** IST dates the import covers, from the sessions it produced */
+  rangeStart: date("range_start").notNull(),
+  rangeEnd: date("range_end").notNull(),
+  /** sessions written, and sessions excluded — both, so the count is honest */
+  sessionCount: integer("session_count").notNull().default(0),
+  excludedCount: integer("excluded_count").notNull().default(0),
+});
+
+/**
+ * An exam, read from a timetable.
+ *
+ * An exam is a DEADLINE with work behind it, which is exactly what the goal
+ * layer already models — so each exam links to a bucket whose outcome and
+ * outcome_target_date it drives. Nothing here re-implements goals; it points at
+ * them. Because an exam is days or weeks away, it falls inside
+ * SHORT_HORIZON_WEEKS and the goal pipeline proposes tasks directly rather than
+ * inventing weekly targets for a two-week block.
+ */
+export const exams = pgTable(
+  "exams",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** subject code exactly as printed, e.g. "PWMC" */
+    subjectCode: text("subject_code").notNull(),
+    /** full subject name when the sheet gives one */
+    subjectName: text("subject_name"),
+    kind: examKindEnum("kind").notNull().default("other"),
+    /** IST calendar date, READ from the timetable — never inferred */
+    date: date("date").notNull(),
+    /** IST clock times when the sheet states them; often it does not */
+    startAt: timestamp("start_at", { withTimezone: true }),
+    endAt: timestamp("end_at", { withTimezone: true }),
+    location: text("location"),
+    /** the bucket carrying this exam as its goal */
+    bucketId: uuid("bucket_id").references(() => buckets.id, { onDelete: "set null" }),
+    timetableImportId: uuid("timetable_import_id").references(
+      (): AnyPgColumn => timetableImports.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // One exam of a given kind per subject per date. Re-importing the same
+    // sheet must not produce a second copy.
+    unique("exams_subject_date_kind_uq").on(t.subjectCode, t.date, t.kind),
+    index("exams_date_idx").on(t.date),
+  ],
+);
+
+/* -------------------------------------------------------------------------- */
+/*  Inferred types — import these instead of hand-writing row shapes           */
+/* -------------------------------------------------------------------------- */
 
 /* -------------------------------------------------------------------------- */
 /*  habits — recurring things the user wants placed but that aren't tasks      */

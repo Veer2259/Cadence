@@ -6,6 +6,7 @@ import { narrowCadence } from "@/lib/habits";
 import { DayProfileForm } from "@/components/settings/day-profile-form";
 import { BucketsPanel } from "@/components/settings/buckets-panel";
 import { HabitsPanel } from "@/components/settings/habits-panel";
+import { TimetableImport } from "@/components/settings/timetable-import";
 
 import { GoalsPanel } from "@/components/settings/goals-panel";
 import { bucketGoals, weeklyTargetsFor, weekStartOf } from "@/lib/goals";
@@ -84,6 +85,13 @@ export default async function SettingsPage() {
           }}
         />
 
+      </Section>
+
+      <Section
+        title="Class timetable"
+        description="Upload the PDF with a note on how to read it. Nothing is written until you confirm; excluded classes are shown struck through, and exams become goals."
+      >
+        <TimetableImport />
       </Section>
 
       <Section title="Buckets" description="Projects and life areas. Retiring one keeps its history.">
