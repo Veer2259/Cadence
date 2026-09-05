@@ -42,12 +42,23 @@ const MODELS: Record<ProviderName, Record<ModelRole, string>> = {
   },
   anthropic: {
     /**
-     * The assistant rail. It is now the primary way to operate the app — every
-     * feature is reachable from it — so it routes across ~27 tools, replans a
-     * day by hand, and has to tell a brain dump from an instruction. That is
-     * the hardest judgement in the app and it gets the strongest model.
+     * The assistant rail — the primary way to operate the app, so it runs on
+     * every message.
+     *
+     * Haiku, not Opus. It was briefly on claude-opus-5 on the reasoning that
+     * routing ~28 tools and telling a brain dump from an instruction is the
+     * hardest judgement in the app. It is, but the cost per query did not
+     * justify it: this fires on every single message, including "I'm fried".
+     *
+     * The evidence says a small model handles it. Every routing case was
+     * verified on gemini-3.5-flash-lite — the weakest model configured
+     * anywhere here — including the one that matters most, an UNMARKED brain
+     * dump recognised as a dump rather than acted on as instructions.
+     *
+     * If routing quality does slip, pin it back without a code change:
+     *   ANTHROPIC_CHAT_MODEL=claude-opus-5
      */
-    chat: "claude-opus-5",
+    chat: "claude-haiku-4-5",
     // Mid-tier for the daily planner: compose runs every day.
     compose: "claude-sonnet-5",
     // Small and fast — capture parsing, classification, debrief summary.

@@ -28,8 +28,10 @@ Calendar and capture variables are still placeholders until Phase 6.
   tier is ~20 requests/day, too tight for daily use). Model IDs are in
   [`lib/ai/models.ts`](lib/ai/models.ts); each can be pinned via an env var
   (`GEMINI_COMPOSE_MODEL`, …) to ride out an outage.
-- Anthropic defaults: compose `claude-sonnet-5`, capture `claude-haiku-4-5`,
-  reason `claude-sonnet-5`. Model ids carry no date suffix.
+- Anthropic defaults: chat `claude-haiku-4-5`, compose `claude-sonnet-5`,
+  capture `claude-haiku-4-5`, reason `claude-sonnet-5`. Ids carry no date
+  suffix. The assistant rail runs on every message, so it is deliberately the
+  cheap model; `ANTHROPIC_CHAT_MODEL` pins it higher.
 - Every configured id is checked at boot against the provider's own model list
   (Gemini ListModels, Anthropic `GET /v1/models`) and reported on one `[models]`
   line. A `✗` names the bad id and suggests near matches — read it after the

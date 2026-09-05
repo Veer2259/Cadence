@@ -96,7 +96,7 @@ deploy.
 1. **Model ids resolved.** Open the deployment's **Runtime Logs** and look for
    one line at boot:
    ```
-   [models] ✓ all 3 configured anthropic model ids exist: compose=…, capture=…, reason=…
+   [models] ✓ all 4 configured anthropic model ids exist: compose=…, capture=…, reason=…, chat=…
    ```
    A `✗` line names the bad id and suggests near matches. `not verified` means
    the provider's API key did not reach the function.

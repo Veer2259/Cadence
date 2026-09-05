@@ -445,8 +445,9 @@ provider and by role (`compose` | `capture`), each overridable by an env var
 
 | Role | Gemini (active) | Anthropic (alternate) |
 |---|---|---|
-| compose, week commentary, chat rail | `gemini-3.7-flash` | `claude-sonnet-5` |
-| capture parsing, classification, debrief summary | `gemini-3.5-flash-lite` | `claude-haiku-4-5-20251001` |
+| the assistant rail (runs on every message) | `gemini-3.7-flash` | `claude-haiku-4-5` |
+| compose, week commentary | `gemini-3.7-flash` | `claude-sonnet-5` |
+| capture parsing, classification, debrief summary | `gemini-3.5-flash-lite` | `claude-haiku-4-5` |
 
 Gemini IDs verified against https://ai.google.dev/gemini-api/docs/models (Aug 2026);
 Anthropic reference: https://docs.claude.com/en/docs/about-claude/models.

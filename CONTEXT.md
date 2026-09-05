@@ -108,9 +108,16 @@ keep/discard per task, and only what survives is saved (SPEC 6.2). Committing,
 discarding and closing the day all return confirmation cards too — closing
 because it is final.
 
-The rail runs on its own `chat` model role, set to the strongest available
-(claude-opus-5 on Anthropic), because routing across 27 tools and telling a dump
-from an instruction is the hardest judgement in the app.
+The rail runs on its own `chat` model role so its model can be tuned without
+touching compose. It is `claude-haiku-4-5`: it was briefly on claude-opus-5, on
+the reasoning that routing ~28 tools and telling a dump from an instruction is
+the hardest judgement in the app — which it is, but this fires on EVERY message
+and the cost per query did not justify it.
+
+The evidence says a small model copes: every routing case was verified on
+gemini-3.5-flash-lite, the weakest model configured anywhere here, including an
+unmarked brain dump correctly recognised as a dump. Pin it back with
+`ANTHROPIC_CHAT_MODEL=claude-opus-5` if quality slips.
 
 Two things stay outside: the day profile and the timetable PDF import. The
 prompt tells the assistant to send you to Settings rather than improvise.
