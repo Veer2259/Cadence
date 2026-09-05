@@ -118,8 +118,13 @@ export const kickoffSchema = z.object({
   candidates: z.array(
     z.object({
       title: z.string().max(200),
-      /** which weekly target this serves; must be one of the ids supplied */
-      weeklyTargetId: z.string(),
+      /**
+       * Which weekly target this serves — one of the ids supplied, or NULL when
+       * the goal is inside the short horizon and has no weekly-target layer at
+       * all. The link is optional everywhere else in the app and stays optional
+       * here (SPEC §3: making it a precondition would stop capture happening).
+       */
+      weeklyTargetId: z.string().nullable(),
       category: z.enum(["deep", "shallow", "calls", "admin", "errand", "personal"]),
       estimateMin: z.number().int(),
       /** one line: why this task, and why this size */

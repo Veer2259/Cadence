@@ -97,6 +97,7 @@ export default async function GoalsPage({
           >
             <KickoffPanel
               weekStart={thisWeek}
+              bucketId={bucketId}
               targets={targets.map((t) => ({
                 id: t.id,
                 label: `${t.bucketName}: ${t.description}`,

@@ -4,13 +4,13 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
 import { buckets, weeklyTargets } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { requireAuth } from "@/lib/auth";
-import { istToday } from "@/lib/time";
 import { insertTask } from "@/lib/tasks";
 import { weekStartOf } from "@/lib/goals";
 import { breakdownTurn, loadTranscript } from "@/lib/ai/modes/breakdown";
-import { proposeWeek } from "@/lib/ai/modes/kickoff";
+import { proposeTasks } from "@/lib/ai/modes/kickoff";
+import { istToday } from "@/lib/time";
 import {
   StructuredOutputError,
   ModelBudgetError,
@@ -89,7 +89,25 @@ const acceptSchema = z.object({
     .max(60),
 });
 
-export type AcceptResult = { ok: boolean; error?: string; created?: number };
+export type AcceptResult = {
+  ok: boolean;
+  error?: string;
+  created?: number;
+  /**
+   * Task candidates proposed immediately after the outcome was saved.
+   *
+   * The failure being fixed is that producing targets and producing tasks
+   * looked like one step and were two: the person set an outcome, saw targets
+   * saved, and never reached the separate screen that turns them into work.
+   */
+  followOn?: {
+    mode: "targets" | "direct";
+    note: string | null;
+    candidates: KickoffResult["candidates"];
+  };
+  /** why the handoff produced nothing, when it produced nothing */
+  followOnError?: string;
+};
 
 export async function acceptBreakdown(input: unknown): Promise<AcceptResult> {
   await requireAuth();
@@ -116,7 +134,27 @@ export async function acceptBreakdown(input: unknown): Promise<AcceptResult> {
   revalidatePath("/goals");
   revalidatePath("/settings");
   revalidatePath("/week");
-  return { ok: true, created: rows.length };
+
+  // THE HANDOFF. Targets alone are not the deliverable — tasks are. Propose
+  // them now, in the same round trip, rather than leaving the person to find a
+  // second screen. Still nothing is written: these go to a review list.
+  //
+  // A failure here must not fail the accept: the outcome and targets ARE saved
+  // at this point, and telling the person otherwise would be a lie.
+  let followOn: AcceptResult["followOn"];
+  let followOnError: string | undefined;
+  try {
+    const out = await proposeTasks({ bucketId });
+    followOn = {
+      mode: out.mode,
+      note: out.result.note,
+      candidates: out.result.candidates,
+    };
+  } catch (e) {
+    followOnError = friendly(e);
+  }
+
+  return { ok: true, created: rows.length, followOn, followOnError };
 }
 
 /* ------------------------------------------------------------------ */
@@ -124,18 +162,22 @@ export async function acceptBreakdown(input: unknown): Promise<AcceptResult> {
 /* ------------------------------------------------------------------ */
 
 export type KickoffReply =
-  | { ok: true; result: KickoffResult }
+  | { ok: true; result: KickoffResult; mode: "targets" | "direct" }
   | { ok: false; error: string };
 
-export async function runKickoff(weekStart?: string): Promise<KickoffReply> {
+export async function runKickoff(
+  weekStart?: string,
+  bucketId?: string | null,
+): Promise<KickoffReply> {
   await requireAuth();
   const wk =
     typeof weekStart === "string" && /^\d{4}-\d{2}-\d{2}$/.test(weekStart)
       ? weekStart
       : weekStartOf(istToday());
+  const id = bucketId && z.string().uuid().safeParse(bucketId).success ? bucketId : null;
   try {
-    const { result } = await proposeWeek(wk);
-    return { ok: true, result };
+    const out = await proposeTasks({ weekStart: wk, bucketId: id });
+    return { ok: true, result: out.result, mode: out.mode };
   } catch (e) {
     return { ok: false, error: friendly(e) };
   }
@@ -147,7 +189,10 @@ const confirmSchema = z.object({
     .array(
       z.object({
         title: z.string().trim().min(1).max(200),
-        weeklyTargetId: z.string().uuid(),
+        /** null when the goal had no weekly-target layer. The link stays optional. */
+        weeklyTargetId: z.string().uuid().nullable(),
+        /** where to file a task that has no target — the goal's own bucket */
+        bucketId: z.string().uuid().nullable().optional(),
         category: z.enum(["deep", "shallow", "calls", "admin", "errand", "personal"]),
         estimateMin: z.number().int().min(5).max(1440),
       }),
@@ -160,23 +205,26 @@ export async function confirmKickoff(input: unknown): Promise<AcceptResult> {
   const parsed = confirmSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Could not read those tasks." };
 
-  // resolve each target's bucket so the task lands in the right one
-  const ids = [...new Set(parsed.data.tasks.map((t) => t.weeklyTargetId))];
-  const targets = ids.length
-    ? await db.select().from(weeklyTargets).where(eq(weeklyTargets.id, ids[0]))
+  // Resolve each target's bucket so a linked task lands in the right one. A
+  // task with no target carries its own bucketId instead.
+  const ids = [
+    ...new Set(
+      parsed.data.tasks
+        .map((t) => t.weeklyTargetId)
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+  const rows = ids.length
+    ? await db.select().from(weeklyTargets).where(inArray(weeklyTargets.id, ids))
     : [];
-  const bucketByTarget = new Map<string, string>();
-  for (const id of ids) {
-    const row =
-      targets.find((t) => t.id === id) ??
-      (await db.query.weeklyTargets.findFirst({ where: eq(weeklyTargets.id, id) }));
-    if (row) bucketByTarget.set(id, row.bucketId);
-  }
+  const bucketByTarget = new Map(rows.map((r) => [r.id, r.bucketId]));
 
   for (const t of parsed.data.tasks) {
     await insertTask({
       title: t.title,
-      bucketId: bucketByTarget.get(t.weeklyTargetId) ?? null,
+      bucketId: t.weeklyTargetId
+        ? (bucketByTarget.get(t.weeklyTargetId) ?? null)
+        : (t.bucketId ?? null),
       category: t.category,
       estimateMin: t.estimateMin,
       weeklyTargetId: t.weeklyTargetId,

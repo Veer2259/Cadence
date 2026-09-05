@@ -50,6 +50,20 @@ export type ComposeHabit = {
   durationMin: number;
   preferredWindow: string | null;
 };
+/**
+ * Which buckets this particular day leans towards, most emphasised first.
+ *
+ * A PREFERENCE. It orders placement and breaks ties; it can never defer a task
+ * or send one to overflow while working minutes remain. Absent entirely when
+ * nothing was emphasised for the date — the honest rendering of "no view".
+ */
+export type ComposeEmphasis = {
+  /** bucket NAMES, ordered, most emphasised first */
+  buckets: string[];
+  /** the person's own one line, if they wrote one */
+  note: string | null;
+};
+
 export type ComposeCalibration = {
   category: string;
   ratio: number;
@@ -84,4 +98,6 @@ export type ComposeInput = {
   habitsDue: ComposeHabit[];
   tasks: ComposeTask[];
   calibration: ComposeCalibration[];
+  /** present only when the person set an ordering for this date */
+  bucketEmphasis?: ComposeEmphasis;
 };

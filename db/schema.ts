@@ -487,6 +487,36 @@ export const energyLog = pgTable(
   (t) => [index("energy_log_date_idx").on(t.date)],
 );
 
+/**
+ * Which buckets matter most on one particular day.
+ *
+ * "Today, CV matters more than case comp" had nowhere to live: priority ranks
+ * TASKS and must_do_today constrains them, but neither says anything about
+ * which BUCKET the day should lean towards when two pieces of work compete for
+ * the same slot.
+ *
+ * One row per date, so the date is the key. `bucket_ids` is ORDERED — first is
+ * most emphasised — and naming a single bucket is simply a one-element list.
+ *
+ * This is a PREFERENCE fed into compose, never a constraint. See
+ * lib/emphasis.ts and the compose prompt: it may order placement and break
+ * ties, and it may never defer a task or send one to overflow while working
+ * minutes remain unused.
+ */
+export const bucketEmphasis = pgTable("bucket_emphasis", {
+  /** IST calendar date. One ordering per day, so this is the primary key. */
+  date: date("date").primaryKey(),
+  /**
+   * Ordered bucket ids, most emphasised first. Ids rather than names because
+   * buckets are renameable; unknown ids are skipped on read, since a bucket can
+   * be retired after a day was emphasised (SPEC §1 principle 7).
+   */
+  bucketIds: jsonb("bucket_ids").$type<string[]>().notNull(),
+  /** optional one line, in the person's own words */
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /* -------------------------------------------------------------------------- */
 /*  Inferred types — import these instead of hand-writing row shapes           */
 /* -------------------------------------------------------------------------- */

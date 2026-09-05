@@ -10,7 +10,10 @@ const CATEGORIES = ["deep", "shallow", "calls", "admin", "errand", "personal"] a
 
 type Candidate = {
   title: string;
-  weeklyTargetId: string;
+  /** null when the goal is inside the short horizon and has no target layer */
+  weeklyTargetId: string | null;
+  /** where an unlinked task is filed — the goal's own bucket */
+  bucketId?: string | null;
   category: (typeof CATEGORIES)[number];
   estimateMin: number;
   reason: string;
@@ -24,9 +27,12 @@ type Candidate = {
 export function KickoffPanel({
   weekStart,
   targets,
+  bucketId,
 }: {
   weekStart: string;
   targets: { id: string; label: string }[];
+  /** the goal being planned, when the screen has one selected */
+  bucketId?: string | null;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -41,7 +47,7 @@ export function KickoffPanel({
     start(async () => {
       let res;
       try {
-        res = await runKickoff(weekStart);
+        res = await runKickoff(weekStart, bucketId);
       } catch (e) {
         setError(describeThrown(e));
         return;
@@ -55,6 +61,7 @@ export function KickoffPanel({
         res.result.candidates.map((c) => ({
           title: c.title,
           weeklyTargetId: c.weeklyTargetId,
+          bucketId: bucketId ?? null,
           category: c.category,
           estimateMin: c.estimateMin,
           reason: c.reason,
@@ -155,23 +162,30 @@ export function KickoffPanel({
                     }
                   />
                 </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-ink-muted">Target</span>
-                  <Select
-                    value={r.weeklyTargetId}
-                    onChange={(e) =>
-                      setRows((rs) =>
-                        rs!.map((x, j) => (j === i ? { ...x, weeklyTargetId: e.target.value } : x)),
-                      )
-                    }
-                  >
-                    {targets.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
+                {/* A short-horizon goal has no target layer, so there is
+                    nothing to pick from — and the link stays optional. */}
+                {targets.length > 0 ? (
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-ink-muted">Target</span>
+                    <Select
+                      value={r.weeklyTargetId ?? ""}
+                      onChange={(e) =>
+                        setRows((rs) =>
+                          rs!.map((x, j) =>
+                            j === i ? { ...x, weeklyTargetId: e.target.value || null } : x,
+                          ),
+                        )
+                      }
+                    >
+                      <option value="">— no target —</option>
+                      {targets.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                ) : null}
                 <label className="flex flex-col gap-1">
                   <span className="text-xs text-ink-muted">Category</span>
                   <Select

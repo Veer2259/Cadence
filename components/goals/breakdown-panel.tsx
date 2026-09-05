@@ -12,6 +12,18 @@ import type { BreakdownTurn } from "@/lib/ai/schemas";
 import { describeThrown } from "@/lib/thrown";
 
 type Msg = { role: "user" | "assistant"; content: string };
+
+type FollowOn = {
+  mode: "targets" | "direct";
+  note: string | null;
+  candidates: {
+    title: string;
+    weeklyTargetId: string | null;
+    category: "deep" | "shallow" | "calls" | "admin" | "errand" | "personal";
+    estimateMin: number;
+    reason: string;
+  }[];
+};
 type Proposal = NonNullable<BreakdownTurn["proposal"]>;
 type EditableTarget = { weekStart: string; description: string; targetHours: string };
 
@@ -50,6 +62,14 @@ export function BreakdownPanel({
   );
   const [reasoning, setReasoning] = useState(initialProposal?.reasoning ?? "");
   const [saved, setSaved] = useState<string | null>(null);
+  /**
+   * Task candidates the accept produced in the same round trip.
+   *
+   * The bug being fixed is that setting a goal and getting tasks out of it
+   * looked like one step and were two, so this is deliberately rendered right
+   * here rather than sending the person to another screen.
+   */
+  const [followOn, setFollowOn] = useState<FollowOn | null>(null);
 
   function send() {
     const text = input.trim();
@@ -109,12 +129,69 @@ export function BreakdownPanel({
         setError(res.error ?? "Could not save.");
         return;
       }
-      setSaved(`Saved the outcome and ${res.created ?? 0} weekly target(s).`);
+      const targetsPart =
+        res.created && res.created > 0
+          ? ` and ${res.created} weekly target${res.created === 1 ? "" : "s"}`
+          : "";
+      setSaved(`Saved the outcome${targetsPart}.`);
+      setFollowOn(res.followOn ?? null);
+      if (res.followOnError) {
+        setError(`Saved, but proposing tasks failed: ${res.followOnError}`);
+      }
       router.refresh();
     });
   }
 
   const hasProposal = outcome.trim().length > 0 || rows.length > 0;
+
+  const followOnPanel = followOn ? (
+    <div className="rounded-[18px] bg-surface p-4 shadow-card">
+      <p className="text-[11px] font-extrabold tracking-[0.12em] text-primary uppercase">
+        {followOn.mode === "direct"
+          ? "Tasks for this goal"
+          : "Tasks for this week"}
+      </p>
+      <p className="mt-1 text-[12.5px] font-semibold text-ink-faint">
+        {followOn.mode === "direct"
+          ? "The deadline is close enough that weekly targets would not add anything, so these are proposed straight against the goal."
+          : "Proposed against the targets you just saved."}
+      </p>
+
+      {followOn.note ? (
+        <p className="mt-2 text-[13px] leading-[1.5] font-medium text-ink-muted">
+          {followOn.note}
+        </p>
+      ) : null}
+
+      {followOn.candidates.length === 0 ? (
+        <p className="mt-2 text-[13px] font-medium text-ink-muted">
+          Nothing proposed.
+        </p>
+      ) : (
+        <>
+          <ul className="mt-3 flex flex-col gap-2">
+            {followOn.candidates.map((c, i) => (
+              <li key={i} className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13.5px] font-bold text-ink">{c.title}</span>
+                  <span className="block text-[11.5px] font-semibold text-ink-faint">
+                    {c.category} · {c.reason}
+                  </span>
+                </span>
+                <span className="tabular shrink-0 text-[12px] font-extrabold text-ink-muted">
+                  {c.estimateMin}m
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-[11.5px] font-semibold text-ink-faint">
+            Nothing here is saved yet — keep or discard each one in the review
+            list below, then add them.
+          </p>
+        </>
+      )}
+    </div>
+  ) : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -314,6 +391,9 @@ export function BreakdownPanel({
             </Button>
             {saved ? <span className="text-xs text-primary">{saved}</span> : null}
           </div>
+
+          {/* The handoff, in the same place the person just pressed Save. */}
+          {followOnPanel}
         </div>
       ) : null}
     </div>

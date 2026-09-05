@@ -22,6 +22,7 @@ import {
 import { computePressure } from "@/lib/pressure";
 import { getLivePlan, applyBlockAdjustment, placeHabitBlock } from "@/lib/plan";
 import { insertCommitment } from "@/lib/commitments";
+import { emphasisFor, resolveBucketNames, setEmphasis } from "@/lib/emphasis";
 import type { ToolDeclaration } from "@/lib/ai/adapters/types";
 
 const CATEGORY = ["deep", "shallow", "calls", "admin", "errand", "personal"] as const;
@@ -197,11 +198,38 @@ export const CHAT_TOOLS: ToolDeclaration[] = [
     description: "The deadline-pressure table for the next 14 days. Read-only.",
     parameters: { type: "object", properties: {} },
   },
+  {
+    name: "set_bucket_emphasis",
+    description:
+      "Record which buckets matter most on a given day, in order. Executes " +
+      'immediately. Use when the person says something like "today CV matters ' +
+      'more than case comp" or "focus on raahat today". Naming one bucket is a ' +
+      "one-element ordering. This is a PREFERENCE the planner weighs — it never " +
+      "forces work to be dropped, and it does not make anything must-do.",
+    parameters: {
+      type: "object",
+      properties: {
+        buckets: {
+          type: "array",
+          items: { type: "string" },
+          description: "existing bucket names, MOST emphasised first",
+        },
+        date: { ...dateField, description: "IST date, YYYY-MM-DD (default: today)" },
+        note: { type: "string", description: "optional one line, their words" },
+      },
+      required: ["buckets"],
+    },
+  },
 ];
 
 /* ------------------------------------------------------------------ */
 /*  Execution                                                          */
 /* ------------------------------------------------------------------ */
+
+function strArray(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+}
 
 function str(v: unknown): string | undefined {
   return typeof v === "string" && v.trim() ? v.trim() : undefined;
@@ -536,6 +564,36 @@ export async function executeChatTool(
             hoursAvailable: d.hoursAvailable,
             status: d.status,
           })),
+        },
+      };
+    }
+
+    case "set_bucket_emphasis": {
+      const names = strArray(args.buckets);
+      if (names.length === 0) {
+        return { result: { error: "Name at least one bucket." } };
+      }
+      const date = str(args.date) ?? istToday();
+      const { ids, unknown } = await resolveBucketNames(names);
+      if (ids.length === 0) {
+        return {
+          result: {
+            error: `None of those match an existing bucket: ${unknown.join(", ")}.`,
+            hint: "Buckets are created in Settings; this tool does not invent them.",
+          },
+        };
+      }
+      await setEmphasis({ date, bucketIds: ids, note: str(args.note) ?? null });
+      const view = await emphasisFor(date);
+      return {
+        result: {
+          date,
+          emphasis: view?.bucketNames ?? [],
+          ignored: unknown,
+          note:
+            "Recorded as a preference for that day. It orders placement and " +
+            "breaks ties; it does not make anything must-do and cannot push " +
+            "work out of a day that still has free time.",
         },
       };
     }

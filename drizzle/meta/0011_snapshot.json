@@ -1,6 +1,6 @@
 {
-  "id": "0b4dab71-580b-473b-9655-9ea94d7edf21",
-  "prevId": "5de86f59-fa0e-46e3-aac5-2c6090ca7660",
+  "id": "f46053bd-da27-41ad-8f49-25db0f1e4fba",
+  "prevId": "0b4dab71-580b-473b-9655-9ea94d7edf21",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1261,6 +1261,44 @@
           "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.bucket_emphasis": {
+      "name": "bucket_emphasis",
+      "schema": "",
+      "columns": {
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "bucket_ids": {
+          "name": "bucket_ids",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

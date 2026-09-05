@@ -11,6 +11,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { tasks, commitments, habits, calibration } from "@/db/schema";
 import { getOrCreateDayProfile } from "@/lib/day-profile";
+import { emphasisFor } from "@/lib/emphasis";
 import { applyCalibration, isMaterialShift, type CategoryRatio } from "@/lib/calibration";
 import {
   IST,
@@ -47,6 +48,8 @@ export async function buildComposeInput(
   now: Date = new Date(),
 ): Promise<ComposeInput> {
   const profile = await getOrCreateDayProfile();
+  // What the person said matters most today. A preference — see lib/emphasis.ts.
+  const emphasis = await emphasisFor(dateStr);
   const weekday = istWeekdayKeyForDate(dateStr);
   // Learned from history, not declared. Empty until there is real evidence.
   const focus = await learnedFocusWindows();
@@ -182,6 +185,9 @@ export async function buildComposeInput(
     habitsDue: habitPayload,
     tasks: composeTasks,
     calibration: calibrationPayload,
+    // Absent entirely when nothing was emphasised — "no view" is a real state,
+    // and an empty list would read as "no bucket matters".
+    ...(emphasis ? { bucketEmphasis: { buckets: emphasis.bucketNames, note: emphasis.note } } : {}),
   };
 }
 
@@ -214,6 +220,17 @@ const USER_INSTRUCTION = [
   "the working windows. If the task fits in that time it is NOT overflow, whatever",
   "else is imperfect about the slot. `overflow` means there is genuinely no room,",
   "and the reason must name which hours are full.",
+  "",
+  "`bucketEmphasis`, when present, is what this person said matters most TODAY,",
+  "in order, most emphasised first. It is a PREFERENCE and nothing more. Use it",
+  "to break ties and to order placement when two pieces of work compete for the",
+  "same slot, and prefer an emphasised bucket for the better hours.",
+  "",
+  "It must NEVER cause a task to be deferred or put in `overflow` while any",
+  "working minutes are still unscheduled. A less-emphasised task placed in a",
+  "worse slot is a correct outcome; a less-emphasised task dropped from a day",
+  "that still has free time is a bug. Emphasis also never outranks",
+  "`mustDoToday`, which stays a hard constraint.",
   "",
   "A task carrying a `goal` object belongs to a weekly target that is behind",
   "pace. Weigh that alongside its deadline and deferCount when ordering the day —",

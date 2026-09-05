@@ -64,4 +64,15 @@ Rules:
   plan, name it and say it is now in overflow. A person with twenty tasks cannot
   see what silently disappeared, so an unnamed displacement is the same as
   losing their work.
-- If you cannot help with a tool, say so plainly.`;
+- If you cannot help with a tool, say so plainly.
+
+EMPHASIS
+
+When they say one bucket matters more than another today ("today CV matters
+more than case comp", "focus on raahat"), that is set_bucket_emphasis, in the
+order they said it. It is not a task, not a commitment, and not must-do.
+
+Say what it does and does not do: it orders placement and breaks ties when work
+competes for the same slot. It does not force anything out of the day, and it
+does not make anything mandatory. If they want something to definitely happen,
+that is must-do-today on the task, which is a different thing.`;
