@@ -28,7 +28,7 @@ export type ModelRole = "compose" | "capture" | "reason";
 
 const MODELS: Record<ProviderName, Record<ModelRole, string>> = {
   gemini: {
-    // Flagship Flash — compose, rebalance, week commentary, chat rail.
+    // Flagship Flash — compose, week commentary, chat rail.
     compose: "gemini-3.7-flash",
     // Lightweight — capture parsing, classification, debrief summary.
     capture: "gemini-3.5-flash-lite",

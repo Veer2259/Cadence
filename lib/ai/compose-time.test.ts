@@ -1,7 +1,7 @@
 /**
  * lib/ai/compose-time.test.ts — composing mid-day must not schedule into hours
  * that have already gone. The model is told this, but the check below is what
- * actually holds; mirrors the replanFrom rule rebalance already enforces.
+ * actually holds.
  */
 
 import { test } from "node:test";

@@ -322,8 +322,6 @@ export const plans = pgTable(
     inputSnapshot: jsonb("input_snapshot"),
     /** the model's validated result (blocks, overflow, calibrationNote) as returned */
     outputSnapshot: jsonb("output_snapshot"),
-    /** set when this plan came from a rebalance */
-    parentPlanId: uuid("parent_plan_id").references((): AnyPgColumn => plans.id),
     /** set once the day has been debriefed — blocks calibration double-counting */
     debriefedAt: timestamp("debriefed_at", { withTimezone: true }),
     /** the two-line descriptive summary written at debrief */

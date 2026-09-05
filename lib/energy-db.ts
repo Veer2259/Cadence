@@ -13,7 +13,7 @@ import type { EnergyLevel, EnergySample } from "@/lib/energy";
 /** Record one sample, stamped with the current IST date + minute of day. */
 export async function recordEnergy(
   level: EnergyLevel,
-  source: "checkin" | "rebalance" = "checkin",
+  source: "checkin" = "checkin",
   now: Date = new Date(),
 ): Promise<void> {
   await db.insert(energyLog).values({

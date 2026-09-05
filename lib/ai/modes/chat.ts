@@ -1,10 +1,15 @@
 /**
  * lib/ai/modes/chat.ts — the assistant-rail loop (SPEC 6.6).
  *
- * Loads the last 30 messages for context, runs the model with the 7 tools,
+ * Loads the last 30 messages for context, runs the model with the tools,
  * executes task reads/writes inline, and stops with a pending action when the
- * model asks to compose or rebalance (the UI shows a confirmation card).
+ * model asks to compose or to drop a block (the UI shows a confirmation card).
  * Persists the exchange and prunes chat_messages to the last 200.
+ *
+ * This is also where REPLANNING happens now. The separate rebalance mode is
+ * gone, so a request like "the morning collapsed, rebuild my afternoon" is
+ * served by get_plan followed by several adjust_block calls — which needs more
+ * round trips than the old ceiling of 5 allowed.
  */
 
 import "server-only";
@@ -19,14 +24,18 @@ import type { ChatTurn, ToolResponse } from "@/lib/ai/adapters/types";
 
 const HISTORY_FOR_CONTEXT = 30;
 const KEEP_MESSAGES = 200;
-/** Routing can legitimately need: list_habits -> place_habit_today ->
- *  trigger_rebalance -> final text. Four tool steps plus the reply. */
-const MAX_STEPS = 5;
+/**
+ * A replan is the longest legitimate sequence: get_plan -> move one block ->
+ * move another -> drop a third -> create a task for what was displaced -> the
+ * reply that names all of it. The old ceiling of 5 was set when replanning was
+ * a separate mode and the rail only had to route a single action.
+ */
+const MAX_STEPS = 9;
 /** whole-message ceiling on outbound calls across the tool loop */
-const CHAT_CALL_BUDGET = 6;
+const CHAT_CALL_BUDGET = 11;
 
 export type PendingAction = {
-  kind: "compose" | "rebalance" | "drop_block";
+  kind: "compose" | "drop_block";
   params: Record<string, unknown>;
 };
 

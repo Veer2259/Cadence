@@ -192,7 +192,7 @@ export function subtractIntervals(base: Interval[], cut: Interval[]): Interval[]
 
 /**
  * Windows with everything before `fromMin` trimmed away. Used to plan only the
- * time that is still ahead — by rebalance (from the replan point) and by
+ * time that is still ahead — by
  * compose when it runs mid-day. Pieces shorter than 5 minutes are dropped.
  */
 export function clipFrom(windows: Window[], fromMin: number): Window[] {

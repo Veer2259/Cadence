@@ -133,8 +133,8 @@ test("a task with two blocks stays accounted for when only one is dropped", () =
   );
 });
 
-test("rebalance that forgets the parent's deferred task loses it", () => {
-  // the parent deferred CV; the child plan was built from open blocks only
+test("a plan built from open blocks only loses what an earlier one deferred", () => {
+  // an earlier plan deferred CV; the next was built from open blocks only
   const parentInput = [T("cv", "start work on CV"), T("sam", "Samagra")];
   const childBlocks = ["sam"];
   const childOverflowWithoutCarry: string[] = [];

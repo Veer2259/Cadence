@@ -46,7 +46,7 @@ them** — no code reads them.
 
 **Vercel → Project → Settings → Functions → Fluid compute: ON.**
 
-Compose, rebalance, capture and breakdown each declare `maxDuration = 300`.
+Compose, capture and breakdown each declare `maxDuration = 300`.
 Without Fluid compute the Hobby ceiling is 60 seconds, and a slow compose —
 they have taken up to ~2.5 minutes under load — is killed mid-call. You would
 see a function timeout rather than a plan.
@@ -57,7 +57,7 @@ as a two-second call.
 It is set on the page segments, not the action files, because Server Actions
 inherit `maxDuration` from the page they are invoked from. It is also on the
 `(app)` layout, because the assistant rail lives there and can trigger a
-compose or rebalance from any page in the group.
+compose from any page in the group.
 
 ---
 

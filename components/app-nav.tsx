@@ -15,7 +15,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 
 /** Routes that More is the hub for — it reads as active on any of them. */
-const MORE_ROUTES = ["/more", "/goals", "/review", "/settings", "/debrief", "/rebalance"];
+const MORE_ROUTES = ["/more", "/goals", "/review", "/settings", "/debrief"];
 
 const TABS = [
   { href: "/today", label: "Today" },

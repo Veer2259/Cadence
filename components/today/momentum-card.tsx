@@ -162,11 +162,6 @@ export function MomentumCard({
         >
           {done ? "Logged ✓" : "Mark done"}
         </Button>
-        <Link href="/rebalance" className="shrink-0">
-          <Button variant="quiet" size="lg" className="whitespace-nowrap">
-            Rebalance
-          </Button>
-        </Link>
       </div>
 
       {error ? (

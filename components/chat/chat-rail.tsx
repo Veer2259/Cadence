@@ -129,12 +129,7 @@ export function ChatPanel({ initial }: { initial: ChatMsg[] }) {
                         the plan?
                       </>
                     ) : (
-                      <>
-                        Run {m.pending.kind}?
-                        {m.pending.kind === "rebalance" && m.pending.params.energy
-                          ? ` (energy: ${String(m.pending.params.energy)})`
-                          : ""}
-                      </>
+                      <>Build today&rsquo;s plan?</>
                     )}
                   </p>
                   <div className="mt-2.5 flex gap-2">

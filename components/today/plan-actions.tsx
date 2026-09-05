@@ -26,7 +26,6 @@ export function PlanActions({
   readOnly = false,
   isToday = true,
   debriefed = false,
-  isRebalance = false,
 }: {
   status: "none" | "draft" | "committed";
   planId?: string;
@@ -39,7 +38,6 @@ export function PlanActions({
    *  IST midnight */
   isToday?: boolean;
   debriefed?: boolean;
-  isRebalance?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -107,15 +105,13 @@ export function PlanActions({
             <Button onClick={() => run(() => commitTodayPlan(planId))} disabled={pending}>
               Commit plan
             </Button>
-            {!isRebalance ? (
-              <Button
-                variant="quiet"
-                onClick={() => run(() => planMyDay(date), true)}
-                disabled={pending}
-              >
-                {pending ? "Re-planning…" : "Re-plan"}
-              </Button>
-            ) : null}
+            <Button
+              variant="quiet"
+              onClick={() => run(() => planMyDay(date), true)}
+              disabled={pending}
+            >
+              {pending ? "Re-planning…" : "Re-plan"}
+            </Button>
             <Button
               variant="danger"
               onClick={() => run(() => discardTodayPlan(planId))}
@@ -123,40 +119,11 @@ export function PlanActions({
             >
               Discard
             </Button>
-            {/* Rebalance needs a COMMITTED plan — it replans the remainder of a
-                day already underway. Showing it here keeps it one tap from the
-                day instead of buried under More, but on a draft it is disabled
-                and says why, rather than linking to a dead end. */}
-            {isToday ? (
-              <span
-                title="Commit the plan first — rebalance replans a day already underway."
-                className="inline-flex min-h-[42px] cursor-not-allowed items-center rounded-full bg-tint px-4 text-sm font-extrabold text-ink-faint opacity-60"
-                aria-disabled="true"
-              >
-                Rebalance
-              </span>
-            ) : null}
-            {isRebalance ? (
-              <span className="w-full text-[11.5px] font-semibold text-ink-faint">
-                Rebalance draft — committing supersedes the earlier plan.
-              </span>
-            ) : null}
           </>
         ) : null}
 
         {status === "committed" && !debriefed ? (
           <>
-            {/* Was gated on being inside a work window, which meant the button
-                vanished exactly when a day had gone off the rails early or run
-                late — the two times you most want to replan. */}
-            {isToday ? (
-              <Link
-                href="/rebalance"
-                className="inline-flex min-h-[42px] items-center rounded-full bg-tint px-4 text-sm font-extrabold text-ink-muted"
-              >
-                Rebalance
-              </Link>
-            ) : null}
             <Link
               href="/debrief"
               className="inline-flex min-h-[42px] items-center rounded-full bg-ink px-4 text-sm font-extrabold text-paper"

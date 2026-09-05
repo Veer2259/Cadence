@@ -15,7 +15,7 @@ Neon · Drizzle ORM + drizzle-kit · Zod · date-fns · Anthropic
 | **1 — Foundation** | Schema, migrations, seed, auth, task/bucket CRUD, day-profile editor, inbox | **done** |
 | **2 — Compose & ribbon** | Provider interface, compose mode, post-validation, plan/block persistence, Today ribbon, commit | **done** |
 | **3 — Debrief & calibration** | One-screen debrief, time_log writes, EWMA calibration, carry-over with defer counting, calibrated estimates surfaced in block reasons | **done** |
-| **4 — Capture, rebalance, chat rail** | Inbox brain-dump → parsed tasks; mid-day rebalance with completed-block preservation by construction; assistant rail with 7 tools + confirmation cards | **done** |
+| **4 — Capture and the chat rail** | Inbox brain-dump → parsed tasks; assistant rail with 12 tools + confirmation cards, which also does mid-day replanning (`get_plan` + `adjust_block`) | **done** |
 | **5 — Week & review** | Deterministic deadline pressure (earliest-due-first allocation, unit tested); Week grid + model `weekNote`; Review charts (accuracy trend, hours/bucket, calibration, defer leaderboard) | **done** |
 | 6 — Calendar, PWA, capture endpoint | Google Calendar sync, iOS shortcut | not started |
 

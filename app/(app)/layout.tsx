@@ -56,7 +56,7 @@ export default async function AppLayout({
             content: m.content,
             createdAt: m.createdAt.toISOString(),
             pending:
-              (m.toolCalls as { pending?: { kind: "compose" | "rebalance"; params: Record<string, unknown> } } | null)
+              (m.toolCalls as { pending?: { kind: "compose" | "drop_block"; params: Record<string, unknown> } } | null)
                 ?.pending ?? null,
           }))}
       />

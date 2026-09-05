@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
-import { recordEnergy } from "@/lib/energy-db";
 import { MustDoOverflowError } from "@/lib/must-do";
 import { istToday } from "@/lib/time";
 import { modelFor } from "@/lib/ai/models";
@@ -11,8 +10,7 @@ import { StructuredOutputError } from "@/lib/ai/provider";
 import { DailyQuotaError, dailyQuotaResetHint } from "@/lib/ai/provider";
 import { runChat, appendAssistantNote, type PendingAction } from "@/lib/ai/modes/chat";
 import { composePlan } from "@/lib/ai/modes/compose";
-import { rebalancePlan } from "@/lib/ai/modes/rebalance";
-import { saveDraftPlan, getCommittedPlan, dropPlanBlock } from "@/lib/plan";
+import { saveDraftPlan, dropPlanBlock } from "@/lib/plan";
 
 export type ChatMsg = {
   role: "user" | "assistant";
@@ -59,7 +57,7 @@ export async function sendChatMessage(content: string): Promise<SendResult> {
 }
 
 const confirmSchema = z.object({
-  kind: z.enum(["compose", "rebalance", "drop_block"]),
+  kind: z.enum(["compose", "drop_block"]),
   params: z.record(z.string(), z.unknown()).default({}),
 });
 
@@ -78,8 +76,13 @@ export async function confirmChatAction(input: unknown): Promise<ConfirmResult> 
       const blockId = z.string().uuid().safeParse(parsed.data.params.blockId);
       if (!blockId.success) return { ok: false, error: "Unknown block." };
       const title = String(parsed.data.params.title ?? "the block");
+      // The card carries the date the block was found on — a drop confirmed
+      // minutes later must land on that day, not on whatever today is.
+      const rawDate = parsed.data.params.date;
+      const dropDate =
+        typeof rawDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : date;
       const res = await dropPlanBlock({
-        dateStr: date,
+        dateStr: dropDate,
         blockId: blockId.data,
         reason: "Displaced by an assistant edit — you asked for something else in this slot.",
       });
@@ -114,33 +117,9 @@ export async function confirmChatAction(input: unknown): Promise<ConfirmResult> 
       return { ok: true, note, changed: true };
     }
 
-    // rebalance
-    const account = String(parsed.data.params.account ?? "");
-    const energyRaw = String(parsed.data.params.energy ?? "ok");
-    const energy = (["sharp", "ok", "fried"].includes(energyRaw) ? energyRaw : "ok") as
-      | "sharp"
-      | "ok"
-      | "fried";
-    if (!(await getCommittedPlan(date))) {
-      const note = "There's no committed plan to rebalance yet.";
-      await appendAssistantNote(note);
-      return { ok: true, note, changed: false };
-    }
-    await recordEnergy(energy, "rebalance");
-    const out = await rebalancePlan(date, { account, energy });
-    await saveDraftPlan({
-      dateStr: date,
-      model: modelFor("compose"),
-      input: out.saveInput,
-      inputSnapshotOverride: out.payload,
-      plan: out.newPlan,
-      preservedBlocks: out.preservedBlocks,
-      parentPlanId: out.parentPlanId,
-    });
-    revalidatePath("/today");
-    const note = "Rebalanced — the new draft is on Today. Committing it supersedes the earlier plan.";
-    await appendAssistantNote(note);
-    return { ok: true, note, changed: true };
+    // Only "compose" reaches here now; drop_block is handled above and
+    // rebalance no longer exists — the rail replans with adjust_block instead.
+    return { ok: false, error: "Unknown action." };
   } catch (e) {
     const msg =
       e instanceof MustDoOverflowError

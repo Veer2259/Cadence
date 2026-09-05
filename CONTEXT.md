@@ -25,7 +25,7 @@ you go → debrief → calibration and focus scores improve the next plan.
 **Phases 1–7 complete (see SPEC §12).**
 
 Working end to end: auth, inbox and capture, compose, the day ribbon with drag
-and per-block logging, rebalance, debrief with calibration, the deadline
+and per-block logging, debrief with calibration, the deadline
 pressure week view, review charts, the assistant rail with routing, the goal
 layer, breakdown and weekly kickoff, learned focus hours, and the PWA manifest.
 
@@ -55,7 +55,7 @@ Quality gates, all passing: `npx tsc --noEmit`, `npm run lint`, `npm test`
    `lib/session.ts`, so a short one fails as a mystery 500 rather than a build
    error.
 
-`maxDuration = 300` lives on **page segments** (`/today`, `/rebalance`,
+`maxDuration = 300` lives on **page segments** (`/today`,
 `/inbox`, `/goals`) and on the `(app)` layout — Server Actions inherit the
 timeout from the page they are invoked from, not from the file they live in, and
 the chat rail sits in that layout so it can fire compose from anywhere.
@@ -68,6 +68,29 @@ real Neon database, and migrations `0000`–`0010` are applied there.
 ## Decisions, and why
 
 These were all made deliberately. Please do not silently reverse them.
+
+### Rebalance was cut; the assistant rail replans instead
+
+There is no rebalance button, screen or mode. It was a second way to do what the
+chat rail and drag-to-move already did, and it carried real machinery to do it:
+its own model call and prompt, its own validation pass, `plans.parent_plan_id`,
+preserved-block copying, and a carry-forward rule for the parent's overflow so
+the handover did not lose work.
+
+A committed day is edited IN PLACE — that was already the rule for drag and for
+assistant edits. Rebalance was the one path that instead built a new plan and
+superseded the old one, which is where all that machinery came from.
+
+The rail now does the job: `get_plan` reads the day, then `adjust_block` moves,
+resizes or drops one block at a time. `get_plan` is the new capability that made
+this possible — before it, the assistant could adjust a block by title but could
+not see what was on the day, which is precisely why replanning needed a mode of
+its own. Its loop was widened from 5 tool steps to 9, and from 6 outbound calls
+to 11, because a replan is several adjustments plus the reply.
+
+What rebalance protected is now in the rail's prompt: a `done` or `partial`
+block is a record and is never moved, nothing is placed before the current time,
+moving beats dropping, and a drop still returns a confirmation card.
 
 ### The app carries three categories, not six, and no task priority
 
@@ -122,7 +145,7 @@ beats a silent cascade, and it matches how the rest of the app behaves:
 
 A manual drag or an assistant edit on a committed plan mutates its block rows
 directly — no new draft, no supersede, no model call. This is a deliberate
-departure from "committed is immutable; rebalance supersedes". The user chose
+departure from "committed is immutable; a new plan supersedes". The user chose
 lightweight direct manipulation over a commit cycle for every nudge. Calibration
 is unaffected because it reads `actual_min` at debrief.
 
@@ -136,7 +159,7 @@ product.
 block or an overflow row with a reason, never neither. `saveDraftPlan` asserts
 it **inside its transaction**, so a plan that would lose a task is rolled back
 rather than saved. Three loss paths were closed: `dropPlanBlock` wrote nothing,
-rebalance ignored the parent's overflow, and `validatePlan` never checked
+the rebalance handover ignored its parent's overflow, and `validatePlan` never checked
 coverage at all.
 
 If you add a new path that removes a block, it must write an overflow row.
@@ -188,11 +211,8 @@ If you add a new path that removes a block, it must write an overflow row.
 - **Focus scores have no real data yet.** There are no debriefed days with deep
   blocks, so the scoring is proven by unit tests and the cold-start path, not by
   live scores. First real numbers appear after a few debriefs.
-- **The rebalance overflow carry-forward is unit-tested, not live-tested** —
-  exercising it end to end costs a model call.
 - **The Today page audits plan accounting against each plan's own
-  `input_snapshot`**, so it can only catch what that snapshot recorded. The
-  rebalance carry-forward is what closes the remaining gap.
+  `input_snapshot`**, so it can only catch what that snapshot recorded.
 - **Anyone with the URL and the passphrase is in.** One user, one secret, by
   design (SPEC §8).
 

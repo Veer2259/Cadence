@@ -78,7 +78,7 @@ The model API key must never reach the browser. All model calls happen in server
     client.ts                  # Anthropic client + a runStructured() helper
     schemas.ts                 # all Zod output schemas
     prompts/                   # one file per mode, prompts as exported consts
-    modes/                     # compose.ts, capture.ts, rebalance.ts, week.ts, debrief.ts
+    modes/                     # compose.ts, capture.ts, week.ts, debrief.ts, chat.ts
   /calibration.ts
   /pressure.ts
   /calendar.ts                 # Google Calendar OAuth + sync
@@ -200,13 +200,12 @@ Recurring things the user wants placed but that aren't tasks — gym, reading, a
 | model | text | which model produced it |
 | input_snapshot | jsonb | the exact payload sent to the model |
 | output_snapshot | jsonb | the model's validated result (blocks, overflow, calibrationNote) |
-| parent_plan_id | uuid nullable | set when this plan came from a rebalance |
 | debriefed_at | timestamptz nullable | set once the day is closed out; blocks a second debrief |
 | debrief_summary | text nullable | the two-line descriptive summary written at debrief |
 
 `input_snapshot` matters: when a plan comes out wrong, the user needs to see what the model was actually given. Do not skip it.
 
-At most one `committed` plan per date (enforced by a partial unique index). A rebalance `draft` (with `parent_plan_id` set) is allowed to coexist with its committed parent; "one `draft` per date" is enforced in code. Committing a plan sets every other live plan for that date to `superseded`.
+At most one `committed` plan per date (enforced by a partial unique index) and one `draft`, enforced in code. A committed day is edited in place, so no second plan supersedes it; committing still sets any other live plan for that date to `superseded` as a defensive measure.
 
 ### `blocks`
 
@@ -337,7 +336,7 @@ Timestamped "how sharp am I right now" check-ins.
 | at | timestamptz | |
 | minute_of_day | integer | 0..1439, IST |
 | level | enum | `fried` \| `ok` \| `sharp` |
-| source | text | `checkin` (Today) or `rebalance` (answered on the replan form) |
+| source | text | `checkin` (the Today check-in) |
 
 Self-reported, and deliberately **separate from `focus_scores`** — those are
 measured from how deep work actually went. One is how you felt, the other is
@@ -446,7 +445,7 @@ provider and by role (`compose` | `capture`), each overridable by an env var
 
 | Role | Gemini (active) | Anthropic (alternate) |
 |---|---|---|
-| compose, rebalance, week commentary, chat rail | `gemini-3.7-flash` | `claude-sonnet-5` |
+| compose, week commentary, chat rail | `gemini-3.7-flash` | `claude-sonnet-5` |
 | capture parsing, classification, debrief summary | `gemini-3.5-flash-lite` | `claude-haiku-4-5-20251001` |
 
 Gemini IDs verified against https://ai.google.dev/gemini-api/docs/models (Aug 2026);
@@ -516,7 +515,7 @@ tier is ~5 requests/minute on the compose model.
 
 **The cold start is stated, not papered over.** When `focusHoursKnown` is false the model is told there is not yet enough history, instructed NOT to assume mornings or any other default, and told to place deep work on deadline pressure, priority, must-do and goal pressure alone — and to say so in the `calibrationNote`. A default morning assumption is precisely the guess this feature removed.
 
-**Every task leaves a trace.** A task present in a plan's input is either a block or an overflow row with a reason — never neither. Enforced by `lib/plan-invariant.ts`: `saveDraftPlan` asserts it INSIDE its transaction, so a plan that would lose a task is rolled back rather than saved; the edit paths re-audit afterwards and surface any loss as a warning. Dropping a block writes an overflow row, and a rebalance carries its parent's overflow forward.
+**Every task leaves a trace.** A task present in a plan's input is either a block or an overflow row with a reason — never neither. Enforced by `lib/plan-invariant.ts`: `saveDraftPlan` asserts it INSIDE its transaction, so a plan that would lose a task is rolled back rather than saved; the edit paths re-audit afterwards and surface any loss as a warning. Dropping a block writes an overflow row.
 
 **Goal pressure.** A task linked to a `weekly_target` that is behind pace
 carries a `goal` object. It is computed in code (`lib/goal-pressure.ts`) by
@@ -627,13 +626,29 @@ export const captureSchema = z.object({
 });
 ```
 
-### 6.3 Rebalance
+### 6.3 Rebalance — CUT
 
-Runs mid-day. Input: the committed plan with each block's current status, the current time, a free-text account of what happened, and an energy level (`sharp` / `ok` / `fried`).
+There is no rebalance mode, no rebalance screen and no rebalance button. Mid-day
+replanning is done by the assistant rail (6.6), by reading the day with
+`get_plan` and moving, resizing and dropping blocks one at a time.
 
-Rules: never move or delete a block already marked `done` or `partial` — carry them into the new plan unchanged. Only the remaining hours are replannable. Tier the unfinished work into must / should / could and be explicit about which tier gets dropped. When energy is `fried`, do not schedule any `deep` block; say so in `calibrationNote`. Use shorter blocks than compose — cap at 90 minutes.
+**Why it was cut.** It was a second way to do what the rail and drag-to-move
+already did, with its own model call, its own prompt, its own validation pass
+and its own screen. A committed day is edited IN PLACE — that was already the
+standing rule for drag and for assistant edits — so rebalance was the one path
+that instead built a whole new plan, superseded the old one, and needed
+`plans.parent_plan_id`, preserved-block copying and a carry-forward rule for the
+parent's overflow to avoid losing work in the handover. All of that machinery
+existed to serve a button.
 
-Output: the same `planSchema`. Write a new `plans` row with `parent_plan_id` set and supersede the old one on commit.
+What it protected is now the rail's responsibility and is stated in its prompt:
+a block already `done` or `partial` is a record of what happened and is never
+moved; nothing is placed before the current time; moving is preferred to
+dropping; and a drop still returns a confirmation card.
+
+`plans.parent_plan_id`, the preserved-block copy and `saveDraftPlan`'s
+rebalance branch are gone with it. `saveDraftPlan` now simply refuses to compose
+over a committed day and says to ask Cadence or drag instead.
 
 ### 6.4 Debrief
 
@@ -652,14 +667,22 @@ Deterministic pressure table from section 5, then a model call for `weekNote` an
 A persistent conversation pane on every screen, with tools:
 
 `create_task`, `update_task`, `list_tasks`, `list_habits`, `place_habit_today`,
-`create_commitment`, `adjust_block`, `trigger_compose`, `trigger_rebalance`,
-`query_time_log`, `get_pressure`.
+`create_commitment`, `get_plan`, `adjust_block`, `trigger_compose`,
+`query_time_log`, `get_pressure`, `set_bucket_emphasis`.
 
 Everything the user could do by clicking, they can do by typing. Task writes,
 commitments and habit placement execute directly; `adjust_block` move/resize
 applies immediately while **drop** returns a confirmation card, as does anything
 that commits a plan. History persists in `chat_messages`; the last 30 go into
 context and the table is pruned to 200.
+
+**Replanning is the rail's job**, since 6.3 was cut. `get_plan` is what makes
+that possible: before it, the rail could adjust a block by title but could not
+see what was on the day, which is exactly why replanning had to be a separate
+mode. The sequence is `get_plan`, then one `adjust_block` per block, then a
+reply naming each change. The loop allows 9 tool steps and 11 outbound calls per
+message — the old ceilings of 5 and 6 were set when the rail only had to route a
+single action.
 
 **Routing.** When something is merely mentioned, the rail works out what kind of
 thing it is: a name matching an existing habit → `place_habit_today`; a new
@@ -801,15 +824,15 @@ Accessibility floor: responsive to 380px, visible keyboard focus, `prefers-reduc
 ## 10. Screens
 
 **Today** — the ribbon, the overflow drawer, and per-block status controls
-(done / partial / skipped). A "Plan my day" button when no plan exists,
-"Rebalance" when one does and the current time is inside the window. Shows
-`calibrationNote` above the ribbon.
+(done / partial / skipped). A "Plan my day" button when no plan exists; once a
+plan is committed the day is changed by dragging a block or by asking Cadence,
+not by a second planning button. Shows `calibrationNote` above the ribbon.
 
 Date navigation: `/today?date=YYYY-MM-DD` with prev / next / today links. Any
 future date can be planned, using that date's weekday work windows, its
 commitments and its habits. **Past days are read-only**, enforced server-side by
-a shared guard — not merely hidden in the UI. Rebalance and the energy check-in
-are today-only.
+a shared guard — not merely hidden in the UI. The energy check-in is
+today-only.
 
 Blocks can be dragged to move and resized by their edges. On drop the positional
 checks re-run and any new conflict is shown, but the move is always kept: see
@@ -867,8 +890,9 @@ The debrief screen, time log writes, the calibration update, carry-over with def
 
 > Phase 3 is where this class of app usually dies and where all the compounding value is. Do not skip ahead to the week view. If the user is still logging actuals three weeks after this phase ships, the rest is worth building.
 
-**Phase 4 — Rebalance and chat rail.**
-Rebalance mode with completed-block preservation, the persistent assistant with its tools, capture mode.
+**Phase 4 — Chat rail.**
+The persistent assistant with its tools, and capture mode. Originally also a
+rebalance mode; that was built and later cut — see 6.3.
 *Done when:* a mid-day replan preserves everything already done, and every action available by clicking is also available by typing.
 
 **Phase 5 — Week and review.**

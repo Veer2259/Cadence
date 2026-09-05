@@ -2,7 +2,7 @@
  * lib/commitments.ts — create a fixed commitment (a thing that cannot move).
  *
  * Shared by the Today "＋ Fixed commitment" form and the chat rail's
- * `create_commitment` tool. Compose / rebalance already treat commitments as
+ * `create_commitment` tool. Compose already treats commitments as
  * absolute, so a commitment written here is honoured by the next plan.
  */
 

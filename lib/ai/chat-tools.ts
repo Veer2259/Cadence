@@ -1,9 +1,15 @@
 /**
- * lib/ai/chat-tools.ts — the 7 chat-rail tools (SPEC 6.6).
+ * lib/ai/chat-tools.ts — the chat-rail tools (SPEC 6.6).
  *
- * Task reads/writes execute immediately. `trigger_compose` and
- * `trigger_rebalance` never execute here — they return a confirmation request
- * that the UI turns into a card the person must accept.
+ * Task reads/writes execute immediately. `trigger_compose` never executes here
+ * — it returns a confirmation request the UI turns into a card the person must
+ * accept, as does dropping a block.
+ *
+ * REPLANNING LIVES HERE NOW. The separate rebalance mode is gone; the rail does
+ * that job by reading the day with `get_plan` and then moving, resizing and
+ * dropping blocks. `get_plan` is what makes that possible — before it, the
+ * assistant could adjust a block by title but could not see what was on the
+ * day, which is precisely why replanning had to be its own mode.
  */
 
 import "server-only";
@@ -32,7 +38,7 @@ export type ToolResult =
   | { result: Record<string, unknown> }
   | {
       confirm: {
-        kind: "compose" | "rebalance" | "drop_block";
+        kind: "compose" | "drop_block";
         params: Record<string, unknown>;
       };
     };
@@ -143,11 +149,25 @@ export const CHAT_TOOLS: ToolDeclaration[] = [
     },
   },
   {
+    name: "get_plan",
+    description:
+      "Read a day's plan: every block with its time, kind, category and status, " +
+      "plus anything in overflow. Read-only. CALL THIS FIRST before moving, " +
+      "resizing or dropping anything — you cannot replan a day you cannot see.",
+    parameters: {
+      type: "object",
+      properties: {
+        date: { ...dateField, description: "IST date, YYYY-MM-DD (default: today)" },
+      },
+    },
+  },
+  {
     name: "adjust_block",
     description:
-      "Move, resize, or drop one block on today's live plan (draft OR committed). " +
+      "Move, resize, or drop one block on a live plan (draft OR committed). " +
       "Found by blockTitleContains. move/resize apply immediately; drop returns a " +
-      "confirmation card. Other blocks are left where they are; any new conflict is reported.",
+      "confirmation card. Other blocks are left where they are; any new conflict " +
+      "is reported. Pass the same `date` you passed to get_plan.",
     parameters: {
       type: "object",
       properties: {
@@ -155,6 +175,7 @@ export const CHAT_TOOLS: ToolDeclaration[] = [
         action: { type: "string", enum: ["move", "resize", "drop"] },
         start: { type: "string", description: "new start, HH:mm (move / resize)" },
         end: { type: "string", description: "new end, HH:mm (resize)" },
+        date: { ...dateField, description: "IST date, YYYY-MM-DD (default: today)" },
       },
       required: ["blockTitleContains", "action"],
     },
@@ -164,19 +185,6 @@ export const CHAT_TOOLS: ToolDeclaration[] = [
     description:
       "Ask to build today's plan. Returns a confirmation card; does not run until accepted.",
     parameters: { type: "object", properties: {} },
-  },
-  {
-    name: "trigger_rebalance",
-    description:
-      "Ask to replan the rest of today. Returns a confirmation card; does not run until accepted.",
-    parameters: {
-      type: "object",
-      properties: {
-        account: { type: "string", description: "what happened so far" },
-        energy: { type: "string", enum: ["sharp", "ok", "fried"] },
-      },
-      required: ["account", "energy"],
-    },
   },
   {
     name: "query_time_log",
@@ -396,7 +404,7 @@ export async function executeChatTool(
           // true = the habit was already on today's plan and was moved, not duplicated
           movedExisting: res.moved === true,
           violations: res.violations,
-          note: "Offer to rebalance the rest of the day; do not move other blocks yourself.",
+          note: "If this displaced anything, say what — then offer to move the affected blocks yourself.",
         },
       };
     }
@@ -419,7 +427,7 @@ export async function executeChatTool(
         return {
           result: {
             created: { title: row.title, date, start, end },
-            note: "The next plan / rebalance will treat this time as blocked.",
+            note: "The next plan will treat this time as blocked.",
           },
         };
       } catch (e) {
@@ -433,12 +441,25 @@ export async function executeChatTool(
       if (!q || !action) {
         return { result: { error: "blockTitleContains and action are required" } };
       }
-      const live = await getLivePlan(istToday());
-      if (!live) return { result: { error: "there is no plan today to adjust" } };
+      // The date must be honoured, not assumed to be today: get_plan can read
+      // any day, and adjusting a block the model just read on another day would
+      // otherwise silently look for it on today's plan and fail.
+      const date = str(args.date) ?? istToday();
+      const live = await getLivePlan(date);
+      if (!live) return { result: { error: `there is no plan on ${date} to adjust` } };
       const matches = live.blocks.filter((b) =>
         b.title.toLowerCase().includes(q.toLowerCase()),
       );
-      if (matches.length === 0) return { result: { error: "no matching block" } };
+      if (matches.length === 0) {
+        return {
+          result: {
+            error: `no block on ${date} matching "${q}"`,
+            // Hand back what IS there, so a failed match is self-correcting
+            // rather than something to retry blindly.
+            blocksOnThatDay: live.blocks.map((b) => b.title),
+          },
+        };
+      }
       if (matches.length > 1) {
         return {
           result: {
@@ -456,7 +477,7 @@ export async function executeChatTool(
         return {
           confirm: {
             kind: "drop_block",
-            params: { blockId: block.id, title: block.title },
+            params: { blockId: block.id, title: block.title, date },
           },
         };
       }
@@ -478,7 +499,7 @@ export async function executeChatTool(
       }
 
       const res = await applyBlockAdjustment({
-        dateStr: istToday(),
+        dateStr: date,
         blockId: block.id,
         startMin,
         endMin,
@@ -502,12 +523,6 @@ export async function executeChatTool(
 
     case "trigger_compose":
       return { confirm: { kind: "compose", params: {} } };
-
-    case "trigger_rebalance": {
-      const account = str(args.account) ?? "";
-      const energy = oneOf(args.energy, ["sharp", "ok", "fried"] as const) ?? "ok";
-      return { confirm: { kind: "rebalance", params: { account, energy } } };
-    }
 
     case "query_time_log": {
       const days = num(args.days) ?? 7;
@@ -542,6 +557,50 @@ export async function executeChatTool(
       }
       return {
         result: { days, totalMin: total, byCategoryMin: byCategory, byBucketMin: byBucket },
+      };
+    }
+
+    case "get_plan": {
+      const date = str(args.date) ?? istToday();
+      const live = await getLivePlan(date);
+      if (!live) {
+        return {
+          result: {
+            date,
+            plan: null,
+            note: "No plan exists for that day. trigger_compose builds one.",
+          },
+        };
+      }
+      const nowMin = istMinutesOfDay(new Date());
+      return {
+        result: {
+          date,
+          status: live.plan.status,
+          debriefed: !!live.plan.debriefedAt,
+          nowMin,
+          now: minutesToHm(nowMin),
+          blocks: live.blocks.map((b) => ({
+            title: b.title,
+            start: minutesToHm(istMinutesOfDay(b.startAt)),
+            end: minutesToHm(istMinutesOfDay(b.endAt)),
+            kind: b.kind,
+            category: b.category,
+            status: b.status,
+            reason: b.reason,
+            // adjust_block matches on the title, so hand back the string that
+            // will actually match rather than making the model guess.
+            adjustBy: b.title,
+          })),
+          overflow: live.overflow.map((o) => ({
+            reason: o.reason,
+            action: o.action,
+            suggestion: o.suggestion,
+          })),
+          note:
+            "Blocks already done or partial are a record of what happened — " +
+            "move or drop them only if the person explicitly says to.",
+        },
       };
     }
 

@@ -46,7 +46,7 @@ export function validatePlan(plan: PlanResult, input: ComposeInput): string[] {
 
   // --- nothing scheduled into hours that have already passed ---
   // The model is told this too, but models drift on arithmetic; this is the
-  // check that actually holds. Mirrors the replanFrom rule rebalance enforces.
+  // check that actually holds.
   for (const b of geoBlocks) {
     if (b.startMin < input.planFromMin - 1) {
       v.push(

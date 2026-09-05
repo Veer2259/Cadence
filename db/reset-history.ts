@@ -71,7 +71,6 @@ async function main() {
     await tx.delete(timeLog);
     await tx.delete(overflow);
     await tx.delete(blocks);
-    await tx.update(plans).set({ parentPlanId: null });
     await tx.delete(plans);
     await tx.delete(calibration);
     await tx.update(tasks).set({ status: "active" }).where(eq(tasks.status, "done"));

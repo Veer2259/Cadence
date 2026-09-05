@@ -1,7 +1,9 @@
 /**
  * lib/plan.ts — persist and read time-blocked plans.
  *
- * At most one committed plan per date. A rebalance draft is allowed to coexist
+ * At most one committed plan per date, and at most one draft. A committed day
+ * is edited in place — there is no second plan that supersedes it. A rebalance
+ * draft used to be allowed to coexist
  * with its committed parent (SPEC 6.3); the "one draft per date" half is
  * enforced here. Committing supersedes every other live plan for that date.
  */
@@ -57,7 +59,7 @@ export async function getLivePlan(dateStr: string): Promise<LivePlan | null> {
   return { plan: row, blocks: bl, overflow: ov };
 }
 
-/** The committed, not-yet-debriefed plan for a date (the rebalance parent). */
+/** The committed, not-yet-debriefed plan for a date. */
 export async function getCommittedPlan(dateStr: string): Promise<LivePlan | null> {
   const row = await db.query.plans.findFirst({
     where: and(eq(plans.date, dateStr), eq(plans.status, "committed")),
@@ -72,21 +74,19 @@ export async function getCommittedPlan(dateStr: string): Promise<LivePlan | null
 
 /**
  * Write a fresh draft plan for `dateStr`, replacing any existing draft.
- * Without `parentPlanId` (a compose), it refuses if a committed plan exists.
- * With `parentPlanId` (a rebalance), the committed parent is expected; the given
- * `preservedBlocks` are copied verbatim into the new plan (SPEC 6.3).
+ *
+ * Refuses if a committed plan already exists for the date. There is no longer a
+ * second path that supersedes one: a committed day is edited IN PLACE, by drag
+ * or by the assistant, which is what "committed plans are edited in place"
+ * already meant for every other kind of change.
  */
 export async function saveDraftPlan(args: {
   dateStr: string;
   model: string;
   input: ComposeInput;
   plan: PlanResult;
-  parentPlanId?: string;
-  preservedBlocks?: Block[];
-  /** stored as input_snapshot instead of `input` (used by rebalance) */
-  inputSnapshotOverride?: unknown;
 }): Promise<string> {
-  const { dateStr, model, input, plan, parentPlanId, preservedBlocks = [] } = args;
+  const { dateStr, model, input, plan } = args;
   const taskIds = new Set(input.tasks.map((t) => t.id));
   const rawByTask = new Map(input.tasks.map((t) => [t.id, t.rawEstimateMin]));
   const habitIdByName = new Map(
@@ -101,15 +101,14 @@ export async function saveDraftPlan(args: {
       await tx.delete(plans).where(eq(plans.id, existingDraft.id)); // cascades
     }
 
-    if (!parentPlanId) {
-      const committed = await tx.query.plans.findFirst({
-        where: and(eq(plans.date, dateStr), eq(plans.status, "committed")),
-      });
-      if (committed) {
-        throw new Error(
-          "A committed plan already exists for this date. Rebalance it instead of re-planning.",
-        );
-      }
+    const committed = await tx.query.plans.findFirst({
+      where: and(eq(plans.date, dateStr), eq(plans.status, "committed")),
+    });
+    if (committed) {
+      throw new Error(
+        "A committed plan already exists for this date. Ask Cadence to change it, " +
+          "or drag the blocks — a committed day is edited in place.",
+      );
     }
 
     const [planRow] = await tx
@@ -118,28 +117,10 @@ export async function saveDraftPlan(args: {
         date: dateStr,
         status: "draft",
         model,
-        inputSnapshot: args.inputSnapshotOverride ?? input,
+        inputSnapshot: input,
         outputSnapshot: plan,
-        parentPlanId: parentPlanId ?? null,
       })
       .returning();
-
-    // preserved blocks — verbatim, new plan id
-    const preservedRows = preservedBlocks.map((b) => ({
-      planId: planRow.id,
-      taskId: b.taskId,
-      habitId: b.habitId,
-      startAt: b.startAt,
-      endAt: b.endAt,
-      kind: b.kind,
-      title: b.title,
-      category: b.category,
-      reason: b.reason,
-      estimateMin: b.estimateMin,
-      rawEstimateMin: b.rawEstimateMin,
-      status: b.status,
-      actualMin: b.actualMin,
-    }));
 
     const newRows = plan.blocks.map((b) => {
       const isTask = b.kind === "task" && !!b.taskId && taskIds.has(b.taskId);
@@ -163,7 +144,7 @@ export async function saveDraftPlan(args: {
       };
     });
 
-    const allRows = [...preservedRows, ...newRows];
+    const allRows = newRows;
     if (allRows.length) await tx.insert(blocks).values(allRows);
 
     const overflowRows = plan.overflow
@@ -476,7 +457,7 @@ async function finishBlockEdit(
   );
 
   // Keep output_snapshot.blocks consistent with the rows so a later
-  // rebalance / audit view does not show stale times.
+  // audit view does not show stale times.
   const planRow = await db.query.plans.findFirst({ where: eq(plans.id, planId) });
   const snap = (planRow?.outputSnapshot ?? null) as PlanResult | null;
   if (snap) {

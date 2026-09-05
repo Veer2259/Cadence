@@ -383,7 +383,6 @@ export default async function TodayPage({
           status={live.plan.status === "committed" ? "committed" : "draft"}
           planId={live.plan.id}
           debriefed={!!live.plan.debriefedAt}
-          isRebalance={!!live.plan.parentPlanId}
         />
       </div>
 

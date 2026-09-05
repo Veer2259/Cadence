@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * The hub for everything the five-tab bar cannot hold. Goals, Review, Debrief,
- * Rebalance and Settings all used to be top-level nav items; at phone width
+ * and Settings all used to be top-level nav items; at phone width
  * that bar overflowed, so they live one tap deeper.
  */
 
@@ -33,12 +33,6 @@ const LINKS = [
     label: "Debrief",
     hint: "Close today and log what really happened",
     dot: "var(--color-primary)",
-  },
-  {
-    href: "/rebalance",
-    label: "Rebalance",
-    hint: "Replan the rest of the day",
-    dot: "var(--color-bucket-churn)",
   },
   {
     href: "/settings",
